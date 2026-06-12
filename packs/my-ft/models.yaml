@@ -9,7 +9,7 @@
 
 slots:
   workhorse:                       # 批量工作位: 提案/批判
-    provider: openai_compat
+    provider: deepseek
     base_url: https://api.deepseek.com
     model: deepseek-chat
     api_key_env: DEEPSEEK_API_KEY
@@ -19,7 +19,7 @@ slots:
     price_out_per_m: 0.42
 
   judge:                           # 裁决位: 主编(预算允许时可升档)
-    provider: openai_compat
+    provider: deepseek
     base_url: https://api.deepseek.com
     model: deepseek-reasoner
     api_key_env: DEEPSEEK_API_KEY

@@ -4,22 +4,19 @@
 # Author: liming
 # Email: lmlala@aliyun.com
 # Copyright (c) 2025 FiuAI
-"""LLM 管理: OpenAI 兼容端点客户端 + 路由/重试/JSON 修复/缓存/预算.
+"""LLM 管理 facade: provider 路由 + JSON 解析/修复 + 缓存 + 成本计量.
 
 设计要点:
 - 模型只做"prompt 进、JSON 出"的纯函数; 无会话状态, 无工具调用;
 - 响应按 prompt 哈希落盘缓存 → 重跑幂等且省钱;
-- 成本记账到 (slot, purpose) 粒度, 超预算抛 BudgetExceeded 终止本次 run。
+- provider/model 差异放 providers/ 与 models/ registry, 不写死在通用 client。
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
-import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Type, TypeVar
 
@@ -27,53 +24,13 @@ from pydantic import BaseModel, ValidationError
 
 from ..core.cards import atomic_write
 from ..core.config import ModelsCfg, SettingsCfg, SlotCfg
+from ..cost import CostMeter, Usage
+from .errors import JSONParseError
+from .models import ProviderRegistry
+from .providers import JsonModePolicy, ProviderResponse
 
 T = TypeVar("T", bound=BaseModel)
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
-
-
-class BudgetExceeded(RuntimeError):
-    """单次 run 的 token/费用封顶触发."""
-
-
-class LLMError(RuntimeError):
-    """重试与修复都失败后的最终错误."""
-
-
-@dataclass
-class Usage:
-    in_tokens: int = 0
-    out_tokens: int = 0
-    usd: float = 0.0
-    cached: bool = False
-
-
-@dataclass
-class CostMeter:
-    """run 级累计与预算守卫."""
-
-    max_usd: float
-    max_tokens: int
-    total_usd: float = 0.0
-    total_tokens: int = 0
-    calls: int = 0
-    cache_hits: int = 0
-    entries: list[dict] = field(default_factory=list)
-
-    def add(self, slot: str, purpose: str, u: Usage) -> None:
-        self.calls += 1
-        if u.cached:
-            self.cache_hits += 1
-        self.total_usd += u.usd
-        self.total_tokens += u.in_tokens + u.out_tokens
-        self.entries.append({"ts": time.time(), "slot": slot,
-                             "purpose": purpose, "in": u.in_tokens,
-                             "out": u.out_tokens, "usd": round(u.usd, 6),
-                             "cached": u.cached})
-        if self.total_usd > self.max_usd or self.total_tokens > self.max_tokens:
-            raise BudgetExceeded(
-                f"预算触顶: ${self.total_usd:.3f}/{self.max_usd} "
-                f"或 {self.total_tokens}/{self.max_tokens} tokens")
 
 
 def extract_json(text: str) -> str:
@@ -107,7 +64,7 @@ def extract_json(text: str) -> str:
 
 
 class LLMClient:
-    """带缓存与预算的同步客户端. fake provider 由 roles 层处理, 不进此类."""
+    """带缓存与预算的同步客户端; provider 差异由 registry 隔离."""
 
     def __init__(self, models: ModelsCfg, settings: SettingsCfg,
                  cache_dir: Path, meter: Optional[CostMeter] = None):
@@ -115,73 +72,112 @@ class LLMClient:
         self.cache_dir = cache_dir
         self.meter = meter or CostMeter(settings.max_run_usd,
                                         settings.max_run_tokens)
-        self._sdk_clients: dict[str, object] = {}
+        self._providers: dict[str, object] = {}
 
     # ---------- 内部 ----------
 
-    def _sdk(self, slot: SlotCfg):
-        if slot.provider == "fake":
-            raise LLMError("provider=fake 的模型位只能配合 --fake 模式使用")
-        key = f"{slot.base_url}|{slot.api_key_env}"
-        if key not in self._sdk_clients:
-            from openai import OpenAI  # 延迟导入: dry-run/测试不需要
-            api_key = os.environ.get(slot.api_key_env, "")
-            if not api_key:
-                raise LLMError(f"环境变量 {slot.api_key_env} 未设置")
-            self._sdk_clients[key] = OpenAI(base_url=slot.base_url,
-                                            api_key=api_key)
-        return self._sdk_clients[key]
+    def _provider(self, slot_name: str, slot: SlotCfg):
+        if slot_name not in self._providers:
+            self._providers[slot_name] = ProviderRegistry.create(slot)
+        return self._providers[slot_name]
 
-    def _cache_path(self, slot: SlotCfg, system: str, user: str) -> Path:
+    def _cache_path(self, slot: SlotCfg, system: str, user: str,
+                    json_policy: JsonModePolicy) -> Path:
         h = hashlib.sha256(
-            f"{slot.model}\x00{system}\x00{user}".encode()).hexdigest()
+            f"{slot.provider}\x00{slot.model}\x00{json_policy}\x00"
+            f"{system}\x00{user}".encode()).hexdigest()
         return self.cache_dir / f"{h}.json"
 
-    def _raw_call(self, slot: SlotCfg, system: str, user: str) -> tuple[str, Usage]:
-        cache = self._cache_path(slot, system, user)
+    def _raw_call(self, slot_name: str, slot: SlotCfg, system: str, user: str,
+                  json_policy: JsonModePolicy) -> ProviderResponse:
+        cache = self._cache_path(slot, system, user, json_policy)
         if cache.is_file():
             data = json.loads(cache.read_text(encoding="utf-8"))
-            return data["text"], Usage(cached=True)
-        last_err: Exception | None = None
-        for attempt in range(3):
-            try:
-                resp = self._sdk(slot).chat.completions.create(
-                    model=slot.model,
-                    temperature=slot.temperature,
-                    max_tokens=slot.max_output_tokens,
-                    messages=[{"role": "system", "content": system},
-                              {"role": "user", "content": user}])
-                text = resp.choices[0].message.content or ""
-                pu = getattr(resp, "usage", None)
-                u = Usage(in_tokens=getattr(pu, "prompt_tokens", 0) or 0,
-                          out_tokens=getattr(pu, "completion_tokens", 0) or 0)
-                u.usd = (u.in_tokens * slot.price_in_per_m
-                         + u.out_tokens * slot.price_out_per_m) / 1e6
-                atomic_write(cache, json.dumps(
-                    {"text": text, "in": u.in_tokens, "out": u.out_tokens},
-                    ensure_ascii=False))
-                return text, u
-            except Exception as e:  # 网络/限流/5xx 指数退避重试
-                last_err = e
-                time.sleep(2 ** attempt)
-        raise LLMError(f"调用失败(3 次重试后): {last_err}")
+            usage = Usage(in_tokens=data.get("in", 0),
+                          out_tokens=data.get("out", 0),
+                          cached=True, provider=data.get("provider", ""),
+                          model=data.get("model", slot.model))
+            return ProviderResponse(text=data["text"], usage=usage)
+        provider = self._provider(slot_name, slot)
+        response = provider.complete(system, user, json_policy)
+        atomic_write(cache, json.dumps({
+            "text": response.text,
+            "in": response.usage.in_tokens,
+            "out": response.usage.out_tokens,
+            "provider": response.usage.provider,
+            "model": response.usage.model,
+        }, ensure_ascii=False))
+        return response
 
     # ---------- 对外 ----------
 
     def complete_json(self, slot_name: str, system: str, user: str,
                       schema: Type[T], purpose: str) -> T:
-        """调用并解析为 schema; 解析失败追加错误信息修复重试一次."""
+        """调用并解析为 schema; 按 slot/provider 策略做 JSON 修复重试."""
         slot = self.models.slot(slot_name)
-        text, usage = self._raw_call(slot, system, user)
-        self.meter.add(slot_name, purpose, usage)
-        for attempt in (0, 1):
+        provider = self._provider(slot_name, slot)
+        json_policy = provider.default_json_policy()
+        system, user = self._ensure_json_prompt(system, user, schema, json_policy)
+        attempts = max(slot.json_repair_attempts, 0) + 1
+        text = ""
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            response = self._raw_call(slot_name, slot, system, user, json_policy)
+            text = response.text
+            self.meter.add(slot_name, _purpose_name(purpose, attempt),
+                           response.usage)
             try:
                 return schema.model_validate_json(extract_json(text))
             except (ValueError, ValidationError) as e:
-                if attempt == 1:
-                    raise LLMError(f"{purpose}: JSON 两次解析失败: {e}")
-                repair_user = (f"{user}\n\n你上一次的输出无法解析:\n{text[:2000]}\n"
-                               f"错误: {e}\n请只输出符合要求的合法 JSON, 不要任何其他文字。")
-                text, usage = self._raw_call(slot, system, repair_user)
-                self.meter.add(slot_name, purpose + ".repair", usage)
-        raise AssertionError("unreachable")
+                last_error = e
+                if attempt == attempts - 1:
+                    break
+                user = self._repair_prompt(user, schema, text, e)
+        summary = text[:1000].replace("\n", "\\n")
+        raise JSONParseError(
+            f"{purpose}: JSON {attempts} 次解析失败: {last_error}; "
+            f"last_output={summary}",
+            purpose=purpose, attempts=attempts, last_output=text)
+
+    # ---------- JSON prompt discipline ----------
+
+    def _ensure_json_prompt(self, system: str, user: str, schema: Type[T],
+                            policy: JsonModePolicy) -> tuple[str, str]:
+        if not policy.enabled:
+            return system, user
+        instruction = _json_instruction(schema)
+        combined = f"{system}\n{user}".lower()
+        if policy.require_json_prompt and "json" not in combined:
+            system = (system + "\n\n" if system else "") + instruction
+        elif "json" not in instruction.lower():
+            system = (system + "\n\n" if system else "") + instruction
+        else:
+            user = user + "\n\n" + instruction
+        return system, user
+
+    def _repair_prompt(self, user: str, schema: Type[T], last_text: str,
+                       error: Exception) -> str:
+        return (
+            f"{user}\n\n"
+            "[JSON 修复请求]\n"
+            "上一轮输出不是合法 JSON object 或不符合 schema。"
+            "请只输出一个合法 JSON object, 不要 Markdown、代码块、解释文字。\n"
+            f"错误: {error}\n"
+            f"上一轮输出摘要: {last_text[:2000]}\n\n"
+            + _json_instruction(schema)
+        )
+
+
+def _purpose_name(purpose: str, attempt: int) -> str:
+    return purpose if attempt == 0 else f"{purpose}.repair{attempt}"
+
+
+def _json_instruction(schema: Type[BaseModel]) -> str:
+    schema_text = json.dumps(schema.model_json_schema(), ensure_ascii=False)
+    if len(schema_text) > 2500:
+        schema_text = schema_text[:2500] + "..."
+    return (
+        "You must output valid json. The response must be exactly one JSON object, "
+        "with no Markdown fences, no prose, and no code. JSON schema summary:\n"
+        f"{schema_text}"
+    )

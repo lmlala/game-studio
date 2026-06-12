@@ -74,9 +74,12 @@ def test_planning_requires_cards(toy_pack: Path, tmp_path: Path):
 
 def test_todo_state_machine(tmp_path: Path):
     plan = RunPlan(goal="g", source="manual",
-                   todos=[TodoState(card_id="TOY-01")])
+                   todos=[TodoState(card_id="TOY-01"),
+                          TodoState(card_id="TOY-02")],
+                   task_name="t", target_files=["cards.md"])
     plan.mark("TOY-01", "in_progress")
     plan.mark("TOY-01", "done", "converged")
+    plan.mark("TOY-02", "failed", "json_invalid")
     assert plan.todo_for("TOY-01").result == "converged"
     with pytest.raises(ValueError):
         plan.mark("TOY-01", "未知状态")
@@ -84,4 +87,17 @@ def test_todo_state_machine(tmp_path: Path):
         plan.mark("GHOST-99", "done")
     path = tmp_path / "plan.json"
     plan.save(path)
-    assert "converged" in path.read_text(encoding="utf-8")
+    loaded = RunPlan.load(path)
+    assert loaded.task_name == "t"
+    assert loaded.todo_for("TOY-02").status == "failed"
+
+
+def test_pending_cards_filters_done_and_retry_failed(toy_pack: Path):
+    cards, _ = _cards_and_task(toy_pack)
+    ids = [c.id for c in cards]
+    plan = RunPlan(goal="g", source="fallback", todos=[
+        TodoState(ids[0], status="done"),
+        TodoState(ids[1], status="failed"),
+    ])
+    assert plan.pending_cards(cards) == []
+    assert [c.id for c in plan.pending_cards(cards, retry_failed=True)] == [ids[1]]

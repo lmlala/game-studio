@@ -109,6 +109,10 @@ python -m studio.cli run --pack packs/my-ft \
 python -m studio.cli run --pack packs/my-ft \
     --task topis/tasks/01-foundation.yaml --fake --no-git
 
+# 3.1 断点续跑: 跳过已 done 的 todo; 需要重跑失败卡时加 --retry-failed
+python -m studio.cli run --pack packs/my-ft \
+    --task topis/tasks/01-foundation.yaml --resume 20260612-xxxx --fake --no-git
+
 # 4. 真跑(任务序列与运行手册见 topis/tasks/README.md, 按 01..15 顺序)
 export DEEPSEEK_API_KEY=sk-...
 python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml
@@ -120,6 +124,10 @@ python -m studio.cli memory --pack packs/my-ft          # 代理经验+主题记
 python -m studio.cli steer --pack packs/my-ft DIR-04 "荒诞预算改为按队伍独立"
 pytest                       # 离线测试(不需要 API key)
 ```
+
+每次 run 会写入 `work/runs/<run_id>/events.jsonl`、`run.log`、`plan.json`
+和 `report.md`。终端输出由 `RunLogger` 流式刷新；如需后台观察，可执行
+`tail -f work/runs/<run_id>/run.log`。
 
 ## 迁出独立 repo
 

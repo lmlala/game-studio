@@ -51,7 +51,7 @@ coverage.xml
 .pytest_cache/
 cover/
 
-# design-studio runtime workspace
+# design-studio runtime workspace (runs/events.jsonl/run.log/plan.json/cache)
 work/
 
 # Translations

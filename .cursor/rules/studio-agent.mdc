@@ -39,6 +39,10 @@ Core constraints:
 - Context changes must define role visibility, trim policy, and tests.
 - Memory is append-only jsonl with deterministic digest; do not summarize memory
   with an LLM.
+- Provider/model differences belong in `studio/llm/providers/` or
+  `studio/llm/models/`; do not hard-code provider behavior in `LLMClient`.
+- Runtime status output must go through `RunLogger`; preserve checkpoint writes
+  to `work/runs/<run_id>/plan.json`.
 
 Required validation after kernel changes:
 

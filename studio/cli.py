@@ -22,10 +22,13 @@ import sys
 from pathlib import Path
 
 from .context.builder import ContextBuilder
+from .cost import BudgetExceeded, CostMeter
 from .core.cards import RepoIndex, atomic_write, replace_card
 from .core.config import StudioConfig, TaskCfg, load_config, load_task
 from .core.gates import check_revision
-from .llm.client import BudgetExceeded, CostMeter, LLMClient
+from .llm.client import LLMClient
+from .llm.errors import LLMError
+from .logging import RunLogger
 from .loop.planning import PlanningService, RunPlan
 from .loop.runner import CardRunner, Outcome
 from .memory.agent import AgentMemory
@@ -146,32 +149,47 @@ def cmd_run(args) -> int:
     cfg, repo, work, registry = _setup(args.pack)
     task = load_task(Path(args.task))
     cards = _select_cards(cfg, repo, task)
-    run_id = work.new_run_id()
+    run_id = args.resume or work.new_run_id()
+    run_dir = work.run_dir(run_id)
+    logger = RunLogger(run_dir, stream=not args.no_stream)
     st = cfg.pack.settings
     meter = CostMeter(st.max_run_usd, st.max_run_tokens)
     client = LLMClient(cfg.models, st, work.cache, meter)
 
-    # 规划阶段: 读任务卡分析 goal/todo(dry-run 不调 LLM, 走确定性回退)
-    planning = PlanningService(work.memory, st.topic_memory_chars)
-    planner = (None if args.dry_run
-               else RoleFactory.build_planner(cfg.cast, cfg.prompts_dir))
-    plan = planning.build(task, cards, planner, client, args.fake)
-    plan_path = work.run_dir(run_id) / "plan.json"
-    plan.save(plan_path)
-    print(f"run {run_id}: 任务={task.name}, 目标[{plan.source}]={plan.goal[:60]}, "
-          f"选中 {len(cards)} 张卡片"
-          + (" [dry-run]" if args.dry_run else "")
-          + (" [fake]" if args.fake else ""))
+    plan_path = run_dir / "plan.json"
+    if args.resume:
+        logger.stage("resume", "start", run=run_id)
+        plan = RunPlan.load(plan_path)
+        plan.assert_matches_task(task)
+        cards = plan.pending_cards(cards, retry_failed=args.retry_failed)
+        logger.event("resume.loaded", str(plan_path), run=run_id,
+                     remaining=len(cards), retry_failed=args.retry_failed)
+    else:
+        logger.stage("planning", "start", task=task.name)
+        planning = PlanningService(work.memory, st.topic_memory_chars)
+        planner = (None if args.dry_run
+                   else RoleFactory.build_planner(cfg.cast, cfg.prompts_dir))
+        plan = planning.build(task, cards, planner, client, args.fake)
+        plan.save(plan_path)
+        logger.checkpoint(plan_path)
+        logger.stage("planning", "done", source=plan.source,
+                     cards=len(plan.todos))
+    logger.event("run.start", task.name, run=run_id, mode=_run_mode(args),
+                 cards=len(cards), goal=plan.goal)
+    logger.plan(plan)
 
     builder = ContextBuilder(repo, cfg, work, task,
                              agent_mem=AgentMemory(work.memory), plan=plan)
     if args.dry_run:
-        out_dir = work.run_dir(run_id)
+        logger.stage("dry_run", "start", cards=len(cards))
+        out_dir = run_dir
         for c in cards:
             bundle = builder.build(c, role_view="critic")
             p = out_dir / f"dryrun-{c.id}.md"
             atomic_write(p, bundle.render())
-            print(f"  {c.id}: 上下文 {bundle.total_chars} 字符 -> {p}")
+            logger.event("dry_run.card", f"{c.id} -> {p}",
+                         card=c.id, chars=bundle.total_chars, path=str(p))
+        logger.stage("dry_run", "done")
         return 0
 
     if "high" in task.rounds:
@@ -185,27 +203,55 @@ def cmd_run(args) -> int:
     runner = CardRunner(cfg=cfg, repo=repo, work=work, client=client,
                         proposer=proposer, critics=critics, referee=referee,
                         task=task, run_id=run_id, skill_loader=loader,
-                        builder=builder, fake=args.fake)
+                        builder=builder, fake=args.fake, logger=logger)
     outcomes: list[Outcome] = []
+    logger.stage("execute", "start", cards=len(cards))
     try:
         for c in cards:
-            print(f"  -> {c.id} {c.title}")
+            logger.event("card.start", c.title, card=c.id)
             plan.mark(c.id, "in_progress")
             plan.save(plan_path)
-            out = runner.run(c, task.stake.get(c.id, task.default_stake))
+            logger.plan(plan)
+            logger.checkpoint(plan_path)
+            try:
+                out = runner.run(c, task.stake.get(c.id, task.default_stake))
+            except BudgetExceeded:
+                raise
+            except (LLMError, ValueError, RuntimeError) as exc:
+                out = Outcome(c.id, "failed", 0, reason=str(exc)[:300])
+                logger.event("card.failed", str(exc)[:200], card=c.id,
+                             result="failed")
             outcomes.append(out)
-            plan.mark(c.id, "done", out.result)
+            plan.mark(c.id, "done" if out.result == "converged" else "failed",
+                      out.result)
             plan.save(plan_path)
-            _apply_outcome(cfg, repo, work, run_id, c, out, args)
+            logger.plan(plan)
+            logger.checkpoint(plan_path)
+            _apply_outcome(cfg, repo, work, run_id, c, out, args, logger)
     except BudgetExceeded as e:
-        print(f"!! {e} — 提前结束, 已完成的卡片不受影响")
+        logger.event("budget.exceeded", str(e), result="skipped")
         for t in plan.todos:
             if t.status in {"pending", "in_progress"}:
                 plan.mark(t.card_id, "skipped", "预算触顶")
         plan.save(plan_path)
+        logger.plan(plan)
+        logger.checkpoint(plan_path)
+    logger.stage("execute", "done", outcomes=len(outcomes))
     _write_report(work, run_id, plan, task, outcomes, meter)
     _record_agent_memory(work, run_id, outcomes)
+    logger.stage("report", "done", path=str(run_dir / "report.md"))
     return 0
+
+
+def _run_mode(args) -> str:
+    flags = []
+    if args.dry_run:
+        flags.append("dry-run")
+    if args.fake:
+        flags.append("fake")
+    if args.resume:
+        flags.append("resume")
+    return "+".join(flags) or "normal"
 
 
 def _record_agent_memory(work: WorkDir, run_id: str,
@@ -222,7 +268,8 @@ def _record_agent_memory(work: WorkDir, run_id: str,
         dropped_unevidenced=sum(o.dropped_issues for o in outcomes))
 
 
-def _apply_outcome(cfg, repo, work, run_id, card, out: Outcome, args) -> None:
+def _apply_outcome(cfg, repo, work, run_id, card, out: Outcome, args,
+                   logger: RunLogger) -> None:
     work.journal(run_id, "card.done", card=card.id, result=out.result,
                  rounds=out.rounds, score=round(out.best_score, 2))
     if out.result == "converged" and out.changed:
@@ -233,13 +280,16 @@ def _apply_outcome(cfg, repo, work, run_id, card, out: Outcome, args) -> None:
             repo_root = card.file.parent
             _git_commit(repo_root, card.file, card.id,
                         f"refine via {run_id} (rounds={out.rounds})")
-        print(f"     converged({out.rounds}轮) 已写回")
+        logger.event("card.done", "已写回", card=card.id, result=out.result,
+                     round=out.rounds)
     elif out.candidate_block and out.candidate_block != card.raw:
         p = work.run_dir(run_id) / "candidates" / f"{card.id}.md"
         atomic_write(p, out.candidate_block)
-        print(f"     {out.result}({out.reason[:60]}) 候选稿 -> {p}")
+        logger.event("card.done", f"候选稿 -> {p}", card=card.id,
+                     result=out.result)
     else:
-        print(f"     {out.result}: {out.reason[:80]}")
+        logger.event("card.done", out.reason[:80], card=card.id,
+                     result=out.result)
 
 
 def _write_report(work, run_id, plan: RunPlan, task, outcomes: list[Outcome],
@@ -288,6 +338,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--fake", action="store_true",
                    help="不调真实 LLM, 用结构合法的假产出走全流程")
     p.add_argument("--no-git", action="store_true")
+    p.add_argument("--no-stream", action="store_true",
+                   help="不向终端流式输出, 只写 run 日志文件")
+    p.add_argument("--resume", default="",
+                   help="从 work/runs/<run_id>/plan.json 断点续跑")
+    p.add_argument("--retry-failed", action="store_true",
+                   help="resume 时重跑 failed todo")
     p.set_defaults(fn=cmd_run)
     args = ap.parse_args(argv)
     return args.fn(args)

@@ -25,6 +25,8 @@ from ..core.config import StudioConfig, TaskCfg
 from ..core.gates import check_revision, filter_unevidenced_issues
 from ..core.interfaces import BaseRole
 from ..llm.client import LLMClient
+from ..llm.errors import LLMError
+from ..logging import RunLogger
 from ..memory.topic import TopicMemory
 from ..memory.workdir import WorkDir
 from ..roles.schemas import Critique, Revision, Verdict
@@ -77,6 +79,7 @@ class CardRunner:
     skill_loader: SkillLoader
     builder: ContextBuilder
     fake: bool = False
+    logger: RunLogger | None = None
     known_ids: set[str] = field(default_factory=set)
     # 跨轮状态: 角色名 -> 上一轮申请的技能 id
     _skill_requests: dict[str, list[str]] = field(default_factory=dict)
@@ -113,7 +116,14 @@ class CardRunner:
         for critic in self.critics:         # 并列: 互相看不到彼此产出
             bundle = self.builder.build(card, role_view="critic",
                                         skills_text=self._skills_for(critic, card))
-            c: Critique = critic.run(self.client, bundle, fake=self.fake)
+            self._log("role.start", critic.name, card=card.id,
+                      role=critic.name)
+            try:
+                c: Critique = critic.run(self.client, bundle, fake=self.fake)
+            except LLMError as exc:
+                self._log("role.failed", str(exc)[:200], card=card.id,
+                          role=critic.name, result="failed")
+                continue
             self._skill_requests[critic.name] = list(c.skill_requests)
             kept, n_drop = filter_unevidenced_issues(
                 [i.model_dump() for i in c.issues])
@@ -122,6 +132,10 @@ class CardRunner:
             critiques[critic.name] = c
             for i in kept:
                 all_issues.append({"from": critic.name, **i})
+            self._log("role.done", critic.name, card=card.id,
+                      role=critic.name, result="ok",
+                      score=round(_mean_score({critic.name: c}), 2),
+                      issues=len(kept), dropped=n_drop)
         return critiques, all_issues, dropped
 
     def _verdict_phase(self, card: Card, all_issues: list[dict],
@@ -132,7 +146,14 @@ class CardRunner:
             "CRITIQUES": json.dumps(all_issues, ensure_ascii=False, indent=1),
             "OPEN_ISSUES": json.dumps(open_issues, ensure_ascii=False, indent=1),
         }
-        return self.referee.run(self.client, bundle, extra=extra, fake=self.fake)
+        self._log("role.start", self.referee.name, card=card.id,
+                  role=self.referee.name)
+        verdict = self.referee.run(self.client, bundle, extra=extra,
+                                   fake=self.fake)
+        self._log("role.done", self.referee.name, card=card.id,
+                  role=self.referee.name, decision=verdict.decision,
+                  directives=len(verdict.directives))
+        return verdict
 
     def _revise_phase(self, verdict: Verdict, current_card: Card,
                       original: Card) -> tuple[Card | None, str, list[str]]:
@@ -146,14 +167,20 @@ class CardRunner:
                  "CURRENT_CARD": current_card.raw}
         errs = []
         for attempt in (0, 1):
+            self._log("role.start", self.proposer.name, card=current_card.id,
+                      role=self.proposer.name, attempt=attempt + 1)
             rev: Revision = self.proposer.run(self.client, bundle,
                                               extra=extra, fake=self.fake)
+            self._log("role.done", self.proposer.name, card=current_card.id,
+                      role=self.proposer.name, attempt=attempt + 1)
             new_card, errs = check_revision(
                 original, rev.card_markdown, self.known_ids,
                 self.cfg.pack.guards, self.cfg.pack.settings.bloat_ratio,
                 expansion_justified=bool(rev.expansion_rationale.strip()))
             if not errs:
                 return new_card, rev.card_markdown, []
+            if self.logger:
+                self.logger.gate_rejected(current_card.id, attempt + 1, errs)
             if attempt == 0:
                 extra["DIRECTIVES"] += (
                     "\n\n[机器门禁拒收, 必须修复以下问题后重新输出完整卡片]\n"
@@ -194,6 +221,8 @@ class CardRunner:
             rounds_done = round_no
             self.work.journal(self.run_id, "round.start",
                               card=card.id, round=round_no)
+            self._log("round.start", f"{card.id} round={round_no}/{max_rounds}",
+                      card=card.id, round=round_no)
             critiques, all_issues, dropped = self._critique_phase(current)
             total_dropped += dropped
             score = _mean_score(critiques)
@@ -207,6 +236,9 @@ class CardRunner:
                 "verdict": verdict.model_dump(),
                 "open_issues": all_issues, "dropped_unevidenced": dropped,
             })
+            self._log("round.done", f"{card.id} round={round_no}",
+                      card=card.id, round=round_no, score=round(score, 2),
+                      decision=verdict.decision, dropped=dropped)
             out = self._check_stop(card, verdict, original, current,
                                    round_no, score, prev_score, best_score,
                                    best_block, total_dropped, gate_errors)
@@ -275,3 +307,7 @@ class CardRunner:
                            candidate_block=best_block, best_score=best_score,
                            dropped_issues=dropped, gate_errors=gate_errors)
         return None
+
+    def _log(self, event: str, message: str = "", **fields) -> None:
+        if self.logger:
+            self.logger.event(event, message, **fields)

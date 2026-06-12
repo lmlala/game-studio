@@ -35,6 +35,8 @@ class WorkDir:
         self.memory = root / "memory"
         self.cache = root / ".cache" / "llm"
         self.ledger = root / "ledger.jsonl"
+        self._last_run_ms = 0
+        self._run_seq = 0
         for d in (self.reviews, self.steering, self.runs,
                   self.memory, self.cache):
             d.mkdir(parents=True, exist_ok=True)
@@ -83,7 +85,14 @@ class WorkDir:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     def new_run_id(self) -> str:
-        return time.strftime("%Y%m%d-%H%M%S")
+        now_ms = int(time.time() * 1000)
+        if now_ms == self._last_run_ms:
+            self._run_seq += 1
+        else:
+            self._last_run_ms = now_ms
+            self._run_seq = 0
+        return (time.strftime("%Y%m%d-%H%M%S")
+                + f"-{now_ms % 1000:03d}-{self._run_seq:02d}")
 
     def run_dir(self, run_id: str) -> Path:
         d = self.runs / run_id
@@ -96,6 +105,12 @@ class WorkDir:
         rec = {"ts": time.time(), "event": event, **kw}
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    def event_log(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "events.jsonl"
+
+    def text_log(self, run_id: str) -> Path:
+        return self.run_dir(run_id) / "run.log"
 
     def write_report(self, run_id: str, text: str) -> Path:
         path = self.run_dir(run_id) / "report.md"

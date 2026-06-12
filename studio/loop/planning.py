@@ -26,7 +26,7 @@ from ..core.interfaces import BaseRole
 from ..memory.topic import TopicMemory
 from ..roles.schemas import Plan
 
-TODO_STATUSES = {"pending", "in_progress", "done", "skipped"}
+TODO_STATUSES = {"pending", "in_progress", "done", "skipped", "failed"}
 
 
 @dataclass
@@ -48,6 +48,8 @@ class RunPlan:
     todos: list[TodoState] = field(default_factory=list)
     constraints: list[str] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
+    task_name: str = ""
+    target_files: list[str] = field(default_factory=list)
 
     def todo_for(self, card_id: str) -> TodoState:
         for t in self.todos:
@@ -64,6 +66,38 @@ class RunPlan:
     def save(self, path: Path) -> None:
         atomic_write(path, json.dumps(asdict(self), ensure_ascii=False,
                                       indent=1))
+
+    @classmethod
+    def load(cls, path: Path) -> "RunPlan":
+        data = json.loads(path.read_text(encoding="utf-8"))
+        todos = [TodoState(**t) for t in data.get("todos", [])]
+        return cls(goal=data["goal"], source=data.get("source", "unknown"),
+                   todos=todos,
+                   constraints=data.get("constraints", []),
+                   risks=data.get("risks", []),
+                   task_name=data.get("task_name", ""),
+                   target_files=data.get("target_files", []))
+
+    def pending_cards(self, cards: list[Card],
+                      retry_failed: bool = False) -> list[Card]:
+        runnable = {"pending", "in_progress", "skipped"}
+        if retry_failed:
+            runnable.add("failed")
+        by_id = {c.id: c for c in cards}
+        out = []
+        for todo in self.todos:
+            if todo.status in runnable and todo.card_id in by_id:
+                out.append(by_id[todo.card_id])
+        return out
+
+    def assert_matches_task(self, task: TaskCfg) -> None:
+        if self.task_name and self.task_name != task.name:
+            raise ValueError(
+                f"resume 任务名不匹配: plan={self.task_name} task={task.name}")
+        if self.target_files and self.target_files != task.target_files:
+            raise ValueError(
+                f"resume target_files 不匹配: plan={self.target_files} "
+                f"task={task.target_files}")
 
 
 class PlanningService:
@@ -90,7 +124,9 @@ class PlanningService:
     def _manual(self, task: TaskCfg, cards: list[Card]) -> RunPlan:
         return RunPlan(goal=task.goal.strip(), source="manual",
                        todos=[TodoState(card_id=c.id) for c in cards],
-                       constraints=list(task.constraints))
+                       constraints=list(task.constraints),
+                       task_name=task.name,
+                       target_files=list(task.target_files))
 
     # ---------- 路径 2: 规划者分析 ----------
 
@@ -110,7 +146,9 @@ class PlanningService:
             list(task.constraints) + [c for c in plan.constraints if c.strip()]))
         return RunPlan(goal=plan.goal.strip(), source="planner", todos=todos,
                        constraints=constraints,
-                       risks=[r for r in plan.risks if r.strip()][:3])
+                       risks=[r for r in plan.risks if r.strip()][:3],
+                       task_name=task.name,
+                       target_files=list(task.target_files))
 
     def _planning_context(self, task: TaskCfg,
                           cards: list[Card]) -> ContextBundle:
@@ -147,4 +185,6 @@ class PlanningService:
             goal += f"; 重点: {direction.splitlines()[0][:80]}"
         return RunPlan(goal=goal, source="fallback",
                        todos=[TodoState(card_id=c.id) for c in cards],
-                       constraints=list(task.constraints))
+                       constraints=list(task.constraints),
+                       task_name=task.name,
+                       target_files=list(task.target_files))

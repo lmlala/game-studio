@@ -4,6 +4,8 @@
 # Author: liming
 # Email: lmlala@aliyun.com
 # Copyright (c) 2025 FiuAI
-"""llm: OpenAI 兼容客户端 + 缓存 + 成本预算."""
+"""llm: provider 适配 + JSON facade + 缓存."""
 
-from .client import BudgetExceeded, CostMeter, LLMClient, LLMError  # noqa: F401
+from .client import LLMClient  # noqa: F401
+from .errors import (EmptyContentError, JSONParseError, LLMError,  # noqa: F401
+                     ProviderCallError)

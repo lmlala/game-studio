@@ -61,7 +61,21 @@ Copyright (c) 2025 FiuAI
   4. 增加测试覆盖隔离与预算行为；
 - 记忆必须 append-only jsonl；摘要必须确定性生成，不用 LLM 总结。
 
-## 6. 测试与验证
+## 6. 模型、日志与 checkpoint 规则
+
+- 模型供应商差异必须放在 `studio/llm/providers/` 或 `studio/llm/models/`；
+  不要在通用 `LLMClient` 里写死 DeepSeek/Qwen/OpenAI 特例；
+- DeepSeek JSON Mode 必须按官方文档走 provider policy：
+  `response_format={"type":"json_object"}`、prompt 含 `json` 和 JSON 样例、
+  空 content 可重试；
+- cost 相关逻辑放 `studio/cost/`，不要散落在 provider 或 CLI；
+- 运行状态输出必须走 `RunLogger`，不要在 `cmd_run/CardRunner` 里新增散落
+  `print`；
+- 每次 todo 状态变化后必须保存 `plan.json`，并记录 checkpoint；
+- 单卡/单角色失败应记录为结构化日志并尽量继续后续卡片，除非是启动期
+  配置错误或预算触顶。
+
+## 7. 测试与验证
 
 改 `studio/` 后至少运行：
 
@@ -75,7 +89,7 @@ python3 -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.ya
 如果运行 `--fake --no-git`，它会写回卡片和 `work/` 记忆；验证后必须还原
 卡片改动并清理 `work/`，不要把运行产物提交进仓库。
 
-## 7. 文档同步规则
+## 8. 文档同步规则
 
 - 改子包边界、规划阶段、上下文配方、skill 格式、记忆结构时，必须同步
   `docs/studio/architecture.md`；

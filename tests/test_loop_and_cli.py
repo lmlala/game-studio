@@ -34,6 +34,12 @@ def test_validate_and_status(toy_pack: Path, capsys):
     assert "TOY-01" in out and "TOY-02" in out
 
 
+def test_run_id_has_subsecond_entropy(tmp_path: Path):
+    work = WorkDir(tmp_path / "work")
+    ids = {work.new_run_id() for _ in range(3)}
+    assert len(ids) == 3
+
+
 def test_dry_run_writes_context(toy_pack: Path):
     task = _write_task(toy_pack)
     assert main(["run", "--pack", str(toy_pack), "--task", str(task),
@@ -131,6 +137,25 @@ def test_fake_run_writes_plan(toy_pack: Path):
     plan = json.loads(plans[-1].read_text(encoding="utf-8"))
     assert plan["goal"] == "玩具任务目标" and plan["source"] == "manual"
     assert all(t["status"] == "done" for t in plan["todos"])
+    run_dir = plans[-1].parent
+    assert (run_dir / "events.jsonl").is_file()
+    assert (run_dir / "run.log").is_file()
+    assert "card:done" in (run_dir / "run.log").read_text(encoding="utf-8")
+
+
+def test_resume_skips_done_todos(toy_pack: Path, capsys):
+    """resume 读取 plan.json, 默认跳过 done todo."""
+    task = _write_task(toy_pack)
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--fake", "--no-git"]) == 0
+    cfg = load_config(toy_pack)
+    work = WorkDir(cfg.work_dir)
+    run_id = sorted(p.parent.name for p in work.runs.rglob("plan.json"))[-1]
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--resume", run_id, "--fake", "--no-git"]) == 0
+    out = capsys.readouterr().out
+    assert "resume:loaded" in out
+    assert "cards=0" in out
 
 
 def test_context_budget_trims(toy_pack: Path):

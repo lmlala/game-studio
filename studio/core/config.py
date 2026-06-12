@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SettingsCfg(BaseModel):
@@ -122,21 +122,40 @@ class CastCfg(BaseModel):
 class SlotCfg(BaseModel):
     """模型位(models.yaml): 角色通过位名间接绑定模型."""
 
-    provider: str = "openai_compat"        # openai_compat | fake
+    provider: str = "openai_compat"        # deepseek | openai_compat | fake
     base_url: str = ""
     model: str = ""
     api_key_env: str = ""
     temperature: float = 0.2
     max_output_tokens: int = 4096
+    json_mode: bool = False                # provider 是否启用结构化 JSON 模式
+    response_format_supported: bool = False
+    require_json_prompt: bool = False
+    allow_empty_content_retry: bool = False
+    json_repair_attempts: int = 3
     price_in_per_m: float = 0.0            # 每百万输入 token 价格(USD), 记账用
     price_out_per_m: float = 0.0
 
     @field_validator("provider")
     @classmethod
     def _provider_ok(cls, v: str) -> str:
-        if v not in {"openai_compat", "fake"}:
+        if v not in {"deepseek", "openai_compat", "fake"}:
             raise ValueError(f"未知 provider: {v}")
         return v
+
+    @model_validator(mode="after")
+    def _provider_defaults(self) -> "SlotCfg":
+        """按 provider 补默认能力; 显式配置仍可覆盖."""
+        is_deepseek = (self.provider == "deepseek"
+                       or "api.deepseek.com" in self.base_url)
+        if is_deepseek:
+            self.json_mode = True if self.json_mode is False else self.json_mode
+            self.response_format_supported = True
+            self.require_json_prompt = True
+            self.allow_empty_content_retry = True
+        if self.json_repair_attempts < 0:
+            raise ValueError("json_repair_attempts 不能为负")
+        return self
 
 
 class ModelsCfg(BaseModel):
@@ -151,7 +170,7 @@ class ModelsCfg(BaseModel):
 class TaskCfg(BaseModel):
     """一次运行的任务定义(topis/tasks/*.yaml).
 
-    goal 必填: 一句话说清本次运行要达成什么(注入所有角色上下文);
+    goal 可选: 写了表示人工覆盖; 不写则由规划阶段从任务卡分析得出。
     constraints 可选: 本次运行的边界条件(不做什么、保持什么不变)。
     """
 

@@ -1,0 +1,14 @@
+# 任务 11 — UX 交互(信息架构与周循环)
+name: ux-v1
+target_files: [11-ux-interaction.md]
+max_cards: 7
+default_stake: normal
+stake: {UX-01: high, UX-02: high}
+critics: [一致性批判者, 体验批判者, 叙事批判者]
+direction: >-
+  本轮重点: 1) UX-02 决策卡格式与 AGY-02 动词表对齐(每个动词有无
+  对应入口, 入口有无对应动词); 2) UX-06 因果板与 AGY-03 玩家决策
+  节点的展示约定合并(避免两卡各说一套); 3) UX-05 战报栏目清单与
+  AGY-03"主教练的赛季"、DIR-06 弧线分章合并成单一清单; 4) 每个
+  页面的"同屏信息组 ≤7"约束落到具体页面描述; 5) 比赛日临场干预
+  ≤4 次与 MAT/AGY 的引用一致。

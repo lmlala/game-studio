@@ -1,0 +1,14 @@
+# 任务 13 — 评估管线(指标与 LLM 评估的可实现性)
+name: evaluation-v1
+target_files: [13-evaluation-pipeline.md]
+max_cards: 6
+default_stake: normal
+stake: {EVAL-02: high, EVAL-03: high}
+critics: [一致性批判者, 工程批判者, 数值批判者]
+direction: >-
+  本轮重点: 1) EVAL-02 指标家族逐项补"计算式"细节(口语描述改成
+  伪公式), 并标注各指标的健康带初值; 2) EVAL-03 六维量表的锚定
+  样例每维补 2 个具体例子(可引用 20-golden-scenario 的节点); 3)
+  与 15-mentor 漏斗的衔接段落按漏斗思路稿 §6 的拆卡预告核对术语;
+  4) EVAL-05 任务卡 schema 与 design-studio 的 steering/任务文件
+  格式声明兼容方式; 5) 成本估算按当前 DeepSeek 价位复核。

@@ -1,0 +1,14 @@
+# 任务 02 — 数值宪法自精修(其余任务的数值批判依据, 第二个收敛)
+name: numeric-constitution-v1
+target_files: [18-numeric-design.md]
+max_cards: 7
+default_stake: high
+stake: {NUM-03: normal, NUM-04: normal, NUM-07: normal}
+critics: [一致性批判者, 数值批判者, 工程批判者]
+direction: >-
+  本轮重点: 1) [锁死]条款只许澄清不许改动数值与规则本体, 发现锁死条款
+  确有问题时走 escalate 升级人工, 不得自行修改; 2) NUM-04 速率表与
+  NUM-05 配额表逐行核对来源卡(ACT/REL/DIR/CAT 各卡)的数字, 冲突列入
+  issue 并以本表为准给出修订建议; 3) 每个黄色参数补齐「目标指标+可
+  接受带」; 4) NUM-05 的配额行确认能映射成 15-mentor 的 Count/Between
+  规则, 给出规则 id 草案命名。

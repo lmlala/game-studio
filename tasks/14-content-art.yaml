@@ -1,0 +1,15 @@
+# 任务 14 — 内容流水线 + 美术定调(产品面收尾)
+name: content-art-v1
+target_files: [16-content-pipeline.md, 10-art-style.md]
+max_cards: 9
+default_stake: normal
+stake: {CNT-02: high, CNT-03: high, ART-02: low, ART-03: low, ART-04: low}
+critics: [一致性批判者, 叙事批判者, 体验批判者]
+direction: >-
+  本轮重点: 1) CNT-02 内容包钉版与 CAT-06 存档字段、SEED-04 seed
+  名片三元组的字段级对齐; 2) CNT-01 故事线种子四层级各给 1 个具体
+  示例(可用 20-golden-scenario 的"替补门将怨恨"事件簇做 S1 示例);
+  3) CNT-03 月度节拍的人工投入 ≤6 小时拆到周环节核算; 4) ART 四卡
+  只做一致性与可执行性检查, 不深化美术细节(用户已定调); 5) ART-02
+  形象组合空间(24-36 原型 × 配件)够不够 350 Actor 不重复, 给组合
+  数学验证。

@@ -1,0 +1,29 @@
+# 任务 15 — 全库巡检(第二遍 pass: 全部 refined 后跑, 只挑跨卡问题)
+name: global-sweep-v1
+target_files:
+  - 01-engine-overview.md
+  - 02-worldview.md
+  - 03-narrative-director.md
+  - 04-engine-catalog.md
+  - 05-event-system.md
+  - 06-actor-system.md
+  - 07-relationship-system.md
+  - 08-seed-system.md
+  - 09-match-system.md
+  - 10-art-style.md
+  - 11-ux-interaction.md
+  - 12-player-psychology.md
+  - 13-evaluation-pipeline.md
+  - 16-content-pipeline.md
+  - 18-numeric-design.md
+  - 19-player-agency.md
+max_cards: 100
+default_stake: low
+critics: [一致性批判者]
+rounds: {high: 2, normal: 2}
+direction: >-
+  巡检 pass: 只找跨卡问题——术语漂移、数值与 NUM 总表不一致、接口
+  两端字段不对账(A 卡产出的字段 B 卡是否消费)、重复内容、引用过时。
+  没有跨卡问题的卡直接判 converged, 不要为改而改; 发现的问题若涉及
+  双卡修改, 修当前卡并在 issue 中注明对侧卡需人工开任务。预算说明:
+  本任务量大, 若中途预算触顶属正常, 次日续跑(缓存使已评卡片零成本)。

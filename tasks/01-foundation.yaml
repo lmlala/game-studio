@@ -1,0 +1,13 @@
+# 任务 01 — 架构与确定性地基(被所有系统依赖, 必须最先收敛)
+name: foundation-v1
+target_files: [01-engine-overview.md, 08-seed-system.md]
+max_cards: 11
+default_stake: normal
+stake: {ENG-01: high, ENG-02: high, ENG-03: high, SEED-01: high, SEED-03: high}
+critics: [一致性批判者, 工程批判者, 数值批判者]
+direction: >-
+  本轮重点: 1) ENG-03 引擎 trait 与 StatePatch/EventCandidate/LogRecord
+  三种产物的字段契约要细到可直接写 Rust 类型; 2) SEED-01 的域划分清单
+  逐一对照 04-engine-catalog 的 22 个引擎, 补缺失的域; 3) 所有验收标准
+  的[机器]项检查是否能写成 cargo test 或跑批断言; 4) ENG-06 预算数字
+  与 NUM 宪法(18)不一致处以 18 为准; 5) 不扩写, 收紧表述。

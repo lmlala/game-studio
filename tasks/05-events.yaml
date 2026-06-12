@@ -1,0 +1,15 @@
+# 任务 05 — 事件系统(内容生产的 schema 地基)
+name: events-v1
+target_files: [05-event-system.md]
+max_cards: 7
+default_stake: normal
+stake: {EVT-01: high, EVT-02: high, EVT-07: high}
+critics: [一致性批判者, 叙事批判者, 数值批判者]
+direction: >-
+  本轮重点: 1) EVT-01 schema 的谓词 DSL 给出 8-10 个完整示例(覆盖
+  状态/关系/记忆/标签/阶段五类前置), 与 15-mentor 的规则算子风格
+  对齐; 2) EVT-07 类别配比与 NUM-05 配额表统一成单一真值源(建议
+  EVT-07 引用 NUM-05, 删本卡重复数字); 3) followup 钩子与记忆引用
+  的 30% 占比要求改写成可机器统计的验收; 4) 文本模板的视角(世界/
+  球队/当事人)与语气键机制确认与 DIR-03 风格系统兼容; 5) 检查每个
+  类别至少有一个 20-golden-scenario 式的具体事件示例。

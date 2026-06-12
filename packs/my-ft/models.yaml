@@ -1,0 +1,36 @@
+# Project: my-ft
+# Created Date: 2026-06-12
+# Author: liming
+# Email: lmlala@aliyun.com
+# Copyright (c) 2025 FiuAI
+# 模型位: 角色通过位名间接绑定模型, 换模型只改这里。
+# API key 一律走环境变量, 严禁写入本文件。
+# 价格字段仅用于本地记账(USD / 百万 token), 请按当前账单价自行修正。
+
+slots:
+  workhorse:                       # 批量工作位: 提案/批判
+    provider: openai_compat
+    base_url: https://api.deepseek.com
+    model: deepseek-chat
+    api_key_env: DEEPSEEK_API_KEY
+    temperature: 0.2
+    max_output_tokens: 4096
+    price_in_per_m: 0.28
+    price_out_per_m: 0.42
+
+  judge:                           # 裁决位: 主编(预算允许时可升档)
+    provider: openai_compat
+    base_url: https://api.deepseek.com
+    model: deepseek-reasoner
+    api_key_env: DEEPSEEK_API_KEY
+    temperature: 0.1
+    max_output_tokens: 4096
+    price_in_per_m: 0.28
+    price_out_per_m: 0.42
+
+# 备选: 通义千问(OpenAI 兼容模式), 替换上面任一位即可
+#  workhorse:
+#    provider: openai_compat
+#    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+#    model: qwen-plus
+#    api_key_env: DASHSCOPE_API_KEY

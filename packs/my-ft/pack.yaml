@@ -1,0 +1,47 @@
+# Project: my-ft
+# Created Date: 2026-06-12
+# Author: liming
+# Email: lmlala@aliyun.com
+# Copyright (c) 2025 FiuAI
+# 项目包主配置: design-studio 内核只认识本文件声明的结构, 不认识游戏。
+
+name: my-ft
+# 相对本文件所在目录; 迁出独立 repo 后只需改这一行
+docs_root: ../../../../football-docs
+
+overview_file: 00a-game-overview.md      # 常驻上下文 ⓪ 游戏总览
+protocol_file: 00-design-card-spec.md    # 常驻上下文 ① 卡片协议
+
+# 参与卡片索引的文件(glob, 相对 docs_root; 无卡片的文件会被自动忽略)
+card_files:
+  - "*.md"
+
+# 代码级禁改(宪法文件, agent 任何情况下不得作为任务目标)
+immutable_files:
+  - 00-design-card-spec.md
+  - 00a-game-overview.md
+
+settings:
+  context_budget_chars: 36000
+  max_rounds_high: 5
+  max_rounds_normal: 3
+  score_epsilon: 0.3
+  oscillation_ratio: 0.85
+  score_regression_stop: 0.5
+  bloat_ratio: 1.5
+  max_run_usd: 2.0
+  max_run_tokens: 2000000
+  dep_excerpt_chars: 1200
+  recent_rounds_in_context: 2
+
+guards:
+  vague_words: ["尽量", "适当", "合理", "良好", "若干", "酌情"]
+  # 术语漂移: 规范词 -> 禁用同义替换(来源: 00 协议术语表)
+  forbidden_synonyms:
+    主叙事引擎: ["故事调度器", "剧情引擎", "叙事导演器"]
+    荒诞度: ["荒谬值", "离谱度"]
+    因果 ID: ["原因标识", "因果标记"]
+    战报: ["赛季报告书"]
+  # 已在文档中预告但尚未定义的卡片前缀(15-mentor §6 的 MEN 系列)
+  allowed_ref_prefixes: ["MEN"]
+  writable_statuses: ["draft", "refined"]

@@ -1,0 +1,14 @@
+# 任务 03 — 人物系统(叙事的原子, 在关系/事件之前收敛)
+name: actor-v1
+target_files: [06-actor-system.md]
+max_cards: 7
+default_stake: normal
+stake: {ACT-01: high, ACT-03: high, ACT-05: high}
+critics: [一致性批判者, 叙事批判者, 数值批判者, 体验批判者]
+direction: >-
+  本轮重点: 1) ACT-01 特质池逐个检查"机制相关"——每个特质必须列出
+  具体消费引擎与效果数值(带宽内), 删掉装饰性候选; 2) ACT-03 十种记忆
+  类型与 20-golden-scenario 的用例对齐, 检查"被承诺/承诺被弃"链是否
+  字段齐备; 3) ACT-05 的 12-16 种情境表要枚举出来, 不许留"等"字;
+  4) 所有半衰期/速率数字改为引用 NUM-04 总表; 5) 玩家可见性(模糊档位
+  +助教噪声)的描述与 AGY/UX 不冲突。

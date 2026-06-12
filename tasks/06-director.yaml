@@ -1,0 +1,15 @@
+# 任务 06 — 主叙事引擎(差异化核心, 全班子高规格)
+name: narrative-director-v1
+target_files: [03-narrative-director.md]
+max_cards: 8
+default_stake: normal
+stake: {DIR-01: high, DIR-02: high, DIR-04: high}
+critics: [一致性批判者, 叙事批判者, 数值批判者, 体验批判者]
+direction: >-
+  本轮重点: 1) DIR-01 选牌公式各因子的取值范围与组合方式要可实现
+  (数值批判者按 NUM-02 审乘数链); 2) DIR-02 四压力源权重与个体压力
+  强制释放的阈值补目标指标; 3) DIR-04 荒诞预算的回充/扣费/抑制数值
+  与 NUM-05 absurdity 分布带互相推导验证(给出推导过程); 4) DIR-05
+  世界线演化的"格局检测器"模式清单要枚举并给判定条件; 5) 每张卡的
+  验收[机器]项映射 15-mentor 算子(Count/Seq/Within/Metric), 不能
+  映射的改写; 6) 不扩写, 优先收紧。

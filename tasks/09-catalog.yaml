@@ -1,0 +1,14 @@
+# 任务 09 — 子引擎目录(训练/伤病/媒体/老板/球迷/存档六卡 + 总表)
+name: engine-catalog-v1
+target_files: [04-engine-catalog.md]
+max_cards: 6
+default_stake: normal
+stake: {CAT-06: high}
+critics: [一致性批判者, 叙事批判者, 数值批判者, 工程批判者]
+direction: >-
+  本轮重点: 1) 引擎全景表 22 行逐行核对: 阶段号与 ENG-02 一致、卡片
+  引用真实存在; 2) CAT-06 存档内容清单对照各系统新增状态(弧线/荒诞
+  预算/印记记忆/恩怨账本)查漏; 3) CAT-02 伤病率、CAT-04 干预频率、
+  CAT-05 行动频率统一引用 NUM-05 配额表; 4) CAT-03 媒体引擎的"事实
+  偏离度"机制与 G6 因果锚点的关系说清(歪曲也要有性格/利益锚点);
+  5) 依赖图 mermaid 与 ENG-01 分层单向依赖核对。

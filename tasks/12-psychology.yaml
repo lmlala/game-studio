@@ -1,0 +1,14 @@
+# 任务 12 — 玩家心理与粘性(动机回路与健康红线)
+name: psychology-v1
+target_files: [12-player-psychology.md]
+max_cards: 7
+default_stake: normal
+stake: {PSY-02: high, PSY-03: high, PSY-04: high}
+critics: [一致性批判者, 体验批判者, 叙事批判者]
+direction: >-
+  本轮重点: 1) PSY-02 悬而未决事项 2-4 件的统计口径定义清楚(什么算
+  一件: 活跃弧线? 待兑现承诺? 列穷举表); 2) PSY-03 钩子牌机制的
+  操纵感风险评估写成可执行的 A/B 方案(指标+否决线); 3) PSY-04 与
+  AGY-06 失败代理感的分工边界说清(前者管情绪供给, 后者管归因机制,
+  互相引用不重复); 4) PSY-06 复利事件与 DIR-05 跨赛季引用的验收
+  口径统一; 5) PSY-07 禁止清单逐条给出代码可审计的判定方式。

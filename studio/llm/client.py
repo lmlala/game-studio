@@ -98,11 +98,13 @@ class LLMClient:
     """带缓存与预算的同步客户端; provider 差异由 registry 隔离."""
 
     def __init__(self, models: ModelsCfg, settings: SettingsCfg,
-                 cache_dir: Path, meter: Optional[CostMeter] = None):
+                 cache_dir: Path, meter: Optional[CostMeter] = None,
+                 llm_logger=None):
         self.models = models
         self.cache_dir = cache_dir
         self.meter = meter or CostMeter(settings.max_run_usd,
                                         settings.max_run_tokens)
+        self.llm_logger = llm_logger
         self._providers: dict[str, object] = {}
 
     # ---------- 内部 ----------
@@ -121,7 +123,8 @@ class LLMClient:
 
     def _raw_call(self, slot_name: str, slot: SlotCfg, system: str, user: str,
                   json_policy: JsonModePolicy, on_delta=None,
-                  stream: bool = False) -> ProviderResponse:
+                  stream: bool = False, purpose: str = "",
+                  attempt: int = 0) -> ProviderResponse:
         cache = self._cache_path(slot, system, user, json_policy)
         if cache.is_file():
             data = json.loads(cache.read_text(encoding="utf-8"))
@@ -129,11 +132,14 @@ class LLMClient:
                           out_tokens=data.get("out", 0),
                           cached=True, provider=data.get("provider", ""),
                           model=data.get("model", slot.model))
-            return ProviderResponse(text=data["text"], usage=usage)
+            response = ProviderResponse(text=data["text"], usage=usage)
+            self._log_call(slot_name, slot, purpose, attempt, system, user,
+                           response, cached=True, stream=False)
+            return response
         provider = self._provider(slot_name, slot)
+        use_stream = bool(stream and slot.stream)
         response = provider.complete(system, user, json_policy,
-                                     stream=stream and slot.stream,
-                                     on_delta=on_delta)
+                                     stream=use_stream, on_delta=on_delta)
         atomic_write(cache, json.dumps({
             "text": response.text,
             "in": response.usage.in_tokens,
@@ -141,13 +147,36 @@ class LLMClient:
             "provider": response.usage.provider,
             "model": response.usage.model,
         }, ensure_ascii=False))
+        self._log_call(slot_name, slot, purpose, attempt, system, user,
+                       response, cached=False, stream=use_stream)
         return response
+
+    def _log_call(self, slot_name: str, slot: SlotCfg, purpose: str,
+                  attempt: int, system: str, user: str,
+                  response: ProviderResponse, cached: bool,
+                  stream: bool) -> None:
+        if not self.llm_logger:
+            return
+        self.llm_logger.record(
+            slot=slot_name,
+            provider=response.usage.provider or slot.provider,
+            model=response.usage.model or slot.model,
+            purpose=purpose or slot_name,
+            attempt=attempt,
+            system=system,
+            user=user,
+            response=response.text,
+            in_tokens=response.usage.in_tokens,
+            out_tokens=response.usage.out_tokens,
+            cached=cached,
+            stream=stream,
+        )
 
     # ---------- 对外 ----------
 
     def complete_json(self, slot_name: str, system: str, user: str,
                       schema: Type[T], purpose: str, on_delta=None,
-                      stream: bool = True) -> T:
+                      stream: bool = False) -> T:
         """调用并解析为 schema; 按 slot/provider 策略做 JSON 修复重试."""
         slot = self.models.slot(slot_name)
         provider = self._provider(slot_name, slot)
@@ -158,7 +187,8 @@ class LLMClient:
         last_error: Exception | None = None
         for attempt in range(attempts):
             response = self._raw_call(slot_name, slot, system, user, json_policy,
-                                      on_delta=on_delta, stream=stream)
+                                      on_delta=on_delta, stream=stream,
+                                      purpose=purpose, attempt=attempt)
             text = response.text
             self.meter.add(slot_name, _purpose_name(purpose, attempt),
                            response.usage)

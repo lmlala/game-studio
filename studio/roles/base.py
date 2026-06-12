@@ -64,7 +64,7 @@ class TemplatedRole(BaseRole):
 
     def run(self, client: LLMClient, bundle,
             extra: dict[str, str] | None = None, fake: bool = False,
-            on_delta=None, stream: bool = True):
+            on_delta=None, stream: bool = False):
         extra = extra or {}
         if fake:
             return self.fake_output(extra)

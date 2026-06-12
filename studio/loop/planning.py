@@ -31,12 +31,13 @@ TODO_STATUSES = {"pending", "in_progress", "done", "skipped", "failed"}
 
 @dataclass
 class TodoState:
-    """一条工作项; status/result 只由内核写."""
+    """一条工作项; status/result/failure_reason 只由内核写."""
 
     card_id: str
     focus: str = ""
     status: str = "pending"
     result: str = ""
+    failure_reason: str = ""
 
 
 @dataclass
@@ -57,11 +58,17 @@ class RunPlan:
                 return t
         raise KeyError(f"计划中无此卡片: {card_id}")
 
-    def mark(self, card_id: str, status: str, result: str = "") -> None:
+    def mark(self, card_id: str, status: str, result: str = "",
+             failure_reason: str = "") -> None:
         if status not in TODO_STATUSES:
             raise ValueError(f"非法 todo 状态: {status}")
         t = self.todo_for(card_id)
-        t.status, t.result = status, result[:120]
+        t.status = status
+        t.result = result[:120]
+        if status == "failed" and failure_reason.strip():
+            t.failure_reason = failure_reason.strip()[:300]
+        elif status != "failed":
+            t.failure_reason = ""
 
     def save(self, path: Path) -> None:
         atomic_write(path, json.dumps(asdict(self), ensure_ascii=False,

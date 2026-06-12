@@ -10,3 +10,4 @@ from .base import BaseProvider, JsonModePolicy, ProviderResponse  # noqa: F401
 from .deepseek import DeepSeekProvider  # noqa: F401
 from .fake import FakeProvider  # noqa: F401
 from .openai_compat import OpenAICompatProvider  # noqa: F401
+from .qwen import QwenProvider  # noqa: F401

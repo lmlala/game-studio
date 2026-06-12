@@ -122,7 +122,7 @@ class CastCfg(BaseModel):
 class SlotCfg(BaseModel):
     """模型位(models.yaml): 角色通过位名间接绑定模型."""
 
-    provider: str = "openai_compat"        # deepseek | openai_compat | fake
+    provider: str = "openai_compat"        # deepseek | qwen | openai_compat | fake
     base_url: str = ""
     model: str = ""
     api_key_env: str = ""
@@ -133,15 +133,17 @@ class SlotCfg(BaseModel):
     require_json_prompt: bool = False
     allow_empty_content_retry: bool = False
     json_repair_attempts: int = 3
-    stream: bool = True                    # 是否尝试流式输出
+    stream: bool = False                   # provider 层是否尝试流式(与终端 SSE 无关)
     stream_supported: bool = True          # provider/model 是否支持 stream
+    enable_thinking: bool = False          # Qwen 深度思考; JSON 模式时强制 false
+    thinking_budget: Optional[int] = None  # Qwen 思考 token 预算
     price_in_per_m: float = 0.0            # 每百万输入 token 价格(USD), 记账用
     price_out_per_m: float = 0.0
 
     @field_validator("provider")
     @classmethod
     def _provider_ok(cls, v: str) -> str:
-        if v not in {"deepseek", "openai_compat", "fake"}:
+        if v not in {"deepseek", "qwen", "openai_compat", "fake"}:
             raise ValueError(f"未知 provider: {v}")
         return v
 
@@ -150,17 +152,25 @@ class SlotCfg(BaseModel):
         """按 provider 补默认能力; 显式配置仍可覆盖."""
         is_deepseek = (self.provider == "deepseek"
                        or "api.deepseek.com" in self.base_url)
+        is_qwen = (self.provider == "qwen"
+                   or "dashscope.aliyuncs.com" in self.base_url)
         if is_deepseek:
             self.json_mode = True if self.json_mode is False else self.json_mode
             self.response_format_supported = True
             self.require_json_prompt = True
             self.allow_empty_content_retry = True
             self.stream_supported = True
+        if is_qwen:
+            self.json_mode = True if self.json_mode is False else self.json_mode
+            self.response_format_supported = True
+            self.require_json_prompt = True
         if self.provider == "fake":
             self.stream = False
             self.stream_supported = False
         if self.json_repair_attempts < 0:
             raise ValueError("json_repair_attempts 不能为负")
+        if self.thinking_budget is not None and self.thinking_budget <= 0:
+            raise ValueError("thinking_budget 必须为正")
         return self
 
 

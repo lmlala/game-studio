@@ -28,7 +28,7 @@ from .core.config import StudioConfig, TaskCfg, load_config, load_task
 from .core.gates import check_revision
 from .llm.client import LLMClient
 from .llm.errors import JSONParseError, LLMError
-from .logging import RunLogger
+from .logging import LLMCallLogger, RunLogger
 from .loop.planning import PlanningService, RunPlan
 from .loop.runner import CardRunner, Outcome
 from .memory.agent import AgentMemory
@@ -159,7 +159,9 @@ def cmd_run(args) -> int:
     logger = RunLogger(run_dir, stream=not args.no_stream, printer=printer)
     st = cfg.pack.settings
     meter = CostMeter(st.max_run_usd, st.max_run_tokens)
-    client = LLMClient(cfg.models, st, work.cache, meter)
+    llm_logger = LLMCallLogger(run_dir)
+    client = LLMClient(cfg.models, st, work.cache, meter,
+                       llm_logger=llm_logger)
 
     plan_path = run_dir / "plan.json"
     if args.resume:
@@ -209,7 +211,7 @@ def cmd_run(args) -> int:
                         proposer=proposer, critics=critics, referee=referee,
                         task=task, run_id=run_id, skill_loader=loader,
                         builder=builder, fake=args.fake, logger=logger,
-                        show_messages=not args.disable_message)
+                        show_messages=args.enable_message)
     outcomes: list[Outcome] = []
     logger.stage("execute", "start", cards=len(cards))
     try:
@@ -228,15 +230,19 @@ def cmd_run(args) -> int:
                 reason = _failure_summary(exc)
                 out = Outcome(c.id, "failed", 0, reason=reason)
                 logger.event("card.failed", reason, card=c.id,
-                             result="failed", error="json_invalid")
+                             result="failed", error="json_invalid",
+                             failure_reason=reason)
             except (LLMError, ValueError, RuntimeError) as exc:
                 reason = _failure_summary(exc)
                 out = Outcome(c.id, "failed", 0, reason=reason)
                 logger.event("card.failed", reason, card=c.id,
-                             result="failed")
+                             result="failed", failure_reason=reason)
             outcomes.append(out)
-            plan.mark(c.id, "done" if out.result == "converged" else "failed",
-                      out.result)
+            if out.result == "converged":
+                plan.mark(c.id, "done", out.result)
+            else:
+                plan.mark(c.id, "failed", out.result,
+                          failure_reason=out.reason)
             plan.save(plan_path)
             logger.plan(plan)
             logger.checkpoint(plan_path)
@@ -333,10 +339,12 @@ def _write_report(work, run_id, plan: RunPlan, task, outcomes: list[Outcome],
              f"目标[{plan.source}]: {plan.goal}", ""]
     if plan.risks:
         lines += ["预判风险: " + "; ".join(plan.risks), ""]
-    lines += ["## 计划执行", "", "| 卡片 | 重点 | 状态 |", "|---|---|---|"]
+    lines += ["## 计划执行", "", "| 卡片 | 重点 | 状态 | 结果 | 失败原因 |",
+              "|---|---|---|---|---|"]
     for t in plan.todos:
-        lines.append(f"| {t.card_id} | {t.focus or '-'} "
-                     f"| {t.status}{(' · ' + t.result) if t.result else ''} |")
+        lines.append(
+            f"| {t.card_id} | {t.focus or '-'} | {t.status} | {t.result or '-'} "
+            f"| {t.failure_reason or '-'} |")
     lines += ["", f"卡片数: {len(outcomes)} · LLM 调用: {meter.calls} "
               f"(缓存命中 {meter.cache_hits}) · 费用: ${meter.total_usd:.4f}", "",
               "| 卡片 | 结果 | 轮次 | 最佳分 | 说明 |", "|---|---|---|---|---|"]
@@ -385,8 +393,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-git", action="store_true")
     p.add_argument("--no-stream", action="store_true",
                    help="不向终端流式输出, 只写 run 日志文件")
+    p.add_argument("--enable-message", action="store_true",
+                   help="开启 LLM token 流式展示(默认关闭, 对话见 llm.log)")
     p.add_argument("--disable-message", action="store_true",
-                   help="关闭 LLM message token 流式展示, 保留阶段/todo 输出")
+                   help="(已废弃) 等同默认行为, 请改用 --enable-message")
     p.add_argument("--no-rich", action="store_true",
                    help="强制使用纯文本输出")
     p.add_argument("--no-color", action="store_true",

@@ -12,7 +12,7 @@ from typing import Type
 
 from ...core.config import SlotCfg
 from ..providers import (BaseProvider, DeepSeekProvider, FakeProvider,
-                         OpenAICompatProvider)
+                         OpenAICompatProvider, QwenProvider)
 from .capabilities import infer_provider
 
 
@@ -22,6 +22,7 @@ class ProviderRegistry:
     _PROVIDERS: dict[str, Type[BaseProvider]] = {
         "deepseek": DeepSeekProvider,
         "openai_compat": OpenAICompatProvider,
+        "qwen": QwenProvider,
         "fake": FakeProvider,
     }
 

@@ -40,9 +40,10 @@ class OpenAICompatProvider(BaseProvider):
         last_err: Exception | None = None
         for attempt in range(3):
             try:
-                use_stream = bool(stream and self.slot.stream_supported)
                 kwargs = self._request_kwargs(system, user, json_policy,
-                                              stream=use_stream)
+                                              stream=stream)
+                use_stream = bool(kwargs.get("stream")) or bool(
+                    stream and self.slot.stream_supported)
                 if use_stream:
                     return self._complete_stream(kwargs, on_delta)
                 resp = self._sdk().chat.completions.create(**kwargs)

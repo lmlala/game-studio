@@ -114,12 +114,17 @@ class RichPrinter(BasePrinter):
         table.add_column("Focus")
         table.add_column("Status", no_wrap=True)
         table.add_column("Result")
+        table.add_column("Reason")
         for todo in plan.todos:
             style = STATUS_STYLE.get(todo.status)
             status_text = f"[{style}]{todo.status}[/]" if style else todo.status
+            reason = todo.failure_reason or "-"
+            if todo.status == "failed" and reason == "-" and todo.result:
+                reason = todo.result
             table.add_row(todo.card_id, todo.focus or "-",
                           status_text,
-                          todo.result or "-")
+                          todo.result or "-",
+                          reason[:60] + ("…" if len(reason) > 60 else ""))
         self.console.print(table)
 
     def gate(self, card_id: str, attempt: int, errors: list[dict]) -> None:

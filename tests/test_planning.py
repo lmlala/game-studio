@@ -79,7 +79,9 @@ def test_todo_state_machine(tmp_path: Path):
                    task_name="t", target_files=["cards.md"])
     plan.mark("TOY-01", "in_progress")
     plan.mark("TOY-01", "done", "converged")
-    plan.mark("TOY-02", "failed", "json_invalid")
+    plan.mark("TOY-02", "failed", "json_invalid",
+              failure_reason="json_invalid: model output is not valid JSON")
+    assert plan.todo_for("TOY-02").failure_reason.startswith("json_invalid")
     assert plan.todo_for("TOY-01").result == "converged"
     with pytest.raises(ValueError):
         plan.mark("TOY-01", "未知状态")

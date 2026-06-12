@@ -6,4 +6,5 @@
 # Copyright (c) 2025 FiuAI
 """logging: run 级结构化日志与流式输出."""
 
+from .llm_log import LLMCallLogger  # noqa: F401
 from .run_logger import RunLogger  # noqa: F401

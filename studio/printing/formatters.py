@@ -23,7 +23,8 @@ def format_event_line(event: str, message: str = "",
     if message:
         bits.append(str(message))
     for key in ("card", "round", "role", "result", "decision",
-                "score", "attempts", "cards", "remaining"):
+                "score", "attempts", "cards", "remaining", "failure_reason",
+                "error"):
         if key in fields and fields[key] not in (None, ""):
             bits.append(f"{key}={fields[key]}")
     return " ".join(bits)

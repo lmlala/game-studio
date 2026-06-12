@@ -116,28 +116,35 @@ triggers: [seed, 随机, RNG, 确定性]
 `LLMClient` 是 facade，不直接写死 DeepSeek/Qwen/OpenAI 的调用差异。差异放在：
 
 ```text
-studio/llm/providers/     # deepseek / openai_compat / fake
+studio/llm/providers/     # deepseek / qwen / openai_compat / fake
 studio/llm/models/        # provider registry + capabilities
 studio/cost/              # usage / pricing / budget
 ```
 
+DeepSeek 官方 API **无 Batch 异步接口**（第三方托管平台可能有，但不适用本仓库直连）。
+本 agent 是同步轮次编排（批判→裁决→修订→门禁重试），单卡内多轮依赖即时反馈，
+**不适合** OpenAI-style Batch（小时级延迟、离线提交）。高并发降本应靠 prompt 缓存
+与 `work/.cache/llm` 幂等缓存，而非 Batch。
+
 DeepSeek JSON Output 遵守官方要求：provider 层传
 `response_format={"type":"json_object"}`；prompt 中确保含 `json` 字样并注入
-schema 摘要；空 content 按 provider policy 重试。其他 OpenAI-compatible
-模型只有在 slot 显式声明支持时才传 `response_format`。
+schema 摘要；空 content 按 provider policy 重试。Qwen（百炼兼容模式）同理，
+且 `enable_thinking=true` 与 JSON Mode 互斥 —— JSON 场景由 `QwenProvider`
+强制 `enable_thinking=false`；非 JSON 场景可在 slot 开启思考并自动切 stream。
 
-LLM message 流式输出也在 provider 层适配：
+每次 LLM 调用写入 `runs/<id>/llm.log`（人读）与 `llm.jsonl`（机器读），
+与终端 SSE 解耦。默认不在终端刷 token；需要时用 `--enable-message`。
+
+LLM message 流式输出在 provider 层适配（仅 `--enable-message` 时启用）：
 
 ```text
 Provider.complete(stream=True, on_delta=...)
-    -> on_delta(token)
-    -> RunLogger.message_delta()
-    -> Printer.message_delta()
+    -> on_delta(token)          # 可选: 终端展示
+    -> LLMCallLogger.record()   # 始终: 完整对话落盘
 ```
 
-如果 provider/model 不支持 stream，会自动回退非流式调用。流式内容只用于
-终端观察，最终仍拼成完整字符串后进入 JSON 解析和 schema 校验。CLI
-`--disable-message` 只关闭 token 展示，不关闭阶段/todo 输出。
+如果 provider/model 不支持 stream，会自动回退非流式调用。CLI
+`--enable-message` 才开启 token 终端展示；阶段/todo 输出始终保留。
 
 ## 7. 日志、终端展示与 checkpoint
 
@@ -145,9 +152,11 @@ Provider.complete(stream=True, on_delta=...)
 
 ```text
 work/runs/<run_id>/
-├── plan.json      # checkpoint: goal/todos/status/result
+├── plan.json      # checkpoint: goal/todos/status/result/failure_reason
 ├── events.jsonl   # 结构化事件
 ├── run.log        # 人读日志, 可 tail -f
+├── llm.log        # 每次 LLM 对话(人读)
+├── llm.jsonl      # 每次 LLM 对话(机器读)
 ├── journal.jsonl  # legacy 事件, 保持兼容
 └── report.md
 ```

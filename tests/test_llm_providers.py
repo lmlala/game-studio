@@ -11,6 +11,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from studio.core.config import ModelsCfg, SlotCfg
+from studio.logging.llm_log import LLMCallLogger
 from studio.llm.client import LLMClient
 from studio.llm.providers import DeepSeekProvider, JsonModePolicy
 from studio.roles.schemas import Critique
@@ -98,9 +99,30 @@ def test_deepseek_provider_streams_chunks(monkeypatch):
     assert completions.calls[0]["stream"] is True
 
 
-def test_llm_client_stream_delta_and_cache_no_replay(tmp_path, monkeypatch):
+def test_llm_client_logs_conversation(tmp_path, monkeypatch):
     slot = SlotCfg(provider="deepseek", base_url="https://api.deepseek.com",
                    model="deepseek-chat", api_key_env="X")
+    models = ModelsCfg(slots={"workhorse": slot})
+    llm_logger = LLMCallLogger(tmp_path)
+    client = LLMClient(models, settings=SimpleNamespace(max_run_usd=1,
+                                                       max_run_tokens=1000),
+                       cache_dir=tmp_path / "cache",
+                       llm_logger=llm_logger)
+    provider = DeepSeekProvider(slot)
+    completions = _FakeCompletions([
+        '{"scores":{},"issues":[],"praise":[],"skill_requests":[]}'
+    ])
+    monkeypatch.setattr(provider, "_sdk", lambda: _FakeSDK(completions))
+    client._providers["workhorse"] = provider
+    client.complete_json("workhorse", "system json", "user",
+                         Critique, "test-role", stream=False)
+    assert (tmp_path / "llm.log").is_file()
+    assert "test-role" in (tmp_path / "llm.log").read_text(encoding="utf-8")
+
+
+def test_llm_client_stream_delta_and_cache_no_replay(tmp_path, monkeypatch):
+    slot = SlotCfg(provider="deepseek", base_url="https://api.deepseek.com",
+                   model="deepseek-chat", api_key_env="X", stream=True)
     models = ModelsCfg(slots={"workhorse": slot})
     client = LLMClient(models, settings=SimpleNamespace(max_run_usd=1,
                                                        max_run_tokens=1000),

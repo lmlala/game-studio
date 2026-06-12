@@ -200,9 +200,9 @@ class CardRunner:
             if self.logger:
                 self.logger.gate_rejected(current_card.id, attempt + 1, errs)
             if attempt == 0:
-                extra["DIRECTIVES"] += (
-                    "\n\n[机器门禁拒收, 必须修复以下问题后重新输出完整卡片]\n"
-                    + "\n".join(str(e) for e in errs))
+                extra["DIRECTIVES"] += _gate_repair_directive(
+                    errs, original, rev.card_markdown,
+                    self.cfg.pack.settings.bloat_ratio)
         return None, "", [str(e) for e in errs]
 
     # ---------- 记忆写入 ----------
@@ -350,3 +350,36 @@ class CardRunner:
         if key in self._active_messages and self.logger:
             self.logger.message_end(role, card_id)
             self._active_messages.discard(key)
+
+
+def _gate_repair_directive(errs, old_card: Card, bad_block: str,
+                           bloat_ratio: float) -> str:
+    """把门禁错误转成提案者可执行的修复指令."""
+    lines = ["\n\n[机器门禁拒收: 必须修复后重新输出完整 JSON 对象]",
+             "注意: 仍然只输出 JSON, 不要在 JSON 外输出 Markdown 或 Rust 代码。"]
+    max_chars = int(old_card.body_chars * bloat_ratio)
+    for err in errs:
+        code = getattr(err, "code", "")
+        msg = getattr(err, "msg", str(err))
+        if code == "BLOAT":
+            lines.append(
+                f"- [BLOAT] 当前修订 {len(bad_block)} 字符, 原文 "
+                f"{old_card.body_chars} 字符, 阈值约 {max_chars} 字符。"
+                "请压缩到阈值内; 禁止新增大段 Rust 代码; 只保留接口字段契约的"
+                "要点列表或短代码示意。")
+        elif code in {"PARSE", "FIELD_MISSING", "FIELD_ORDER"}:
+            lines.append(
+                f"- [{code}] {msg}。card_markdown 必须从 `### "
+                f"{old_card.id} {old_card.title}` 开始, 并包含状态行与五个字段。")
+        elif code == "VAGUE_ACCEPTANCE":
+            lines.append(
+                f"- [VAGUE_ACCEPTANCE] {msg}。把模糊词替换为可机器/LLM/人工判定"
+                "的阈值、断言或检查步骤。")
+        elif code in {"DANGLING_REF", "DANGLING_DEP"}:
+            lines.append(
+                f"- [{code}] {msg}。删除不存在引用或改成当前卡片库中真实存在的 ID。")
+        elif code == "TERM_DRIFT":
+            lines.append(f"- [TERM_DRIFT] {msg}。改回术语表规范词。")
+        else:
+            lines.append(f"- [{code}] {msg}")
+    return "\n".join(lines)

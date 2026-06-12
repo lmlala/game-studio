@@ -11,10 +11,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from studio.cli import main
+from studio.cli import _failure_summary, _write_bad_output
 from studio.context.builder import ContextBuilder
 from studio.core.cards import RepoIndex
 from studio.core.config import load_config, load_task
 from studio.memory.workdir import WorkDir
+from studio.llm.errors import JSONParseError
+from studio.loop.runner import _gate_repair_directive
+from studio.core.gates import GateError
+
+from conftest import CARD_A
 
 
 def _write_task(pack: Path, **over) -> Path:
@@ -38,6 +44,28 @@ def test_run_id_has_subsecond_entropy(tmp_path: Path):
     work = WorkDir(tmp_path / "work")
     ids = {work.new_run_id() for _ in range(3)}
     assert len(ids) == 3
+
+
+def test_gate_repair_directive_includes_bloat_budget():
+    from studio.core.cards import parse_block
+
+    old = parse_block(CARD_A)
+    bad = CARD_A + "\n扩写。" * 200
+    text = _gate_repair_directive(
+        [GateError("BLOAT", "too large"),
+         GateError("VAGUE_ACCEPTANCE", "含 尽量")],
+        old, bad, bloat_ratio=1.5)
+    assert "阈值" in text and "禁止新增大段 Rust 代码" in text
+    assert "VAGUE_ACCEPTANCE" in text
+
+
+def test_json_failure_summary_and_bad_output(tmp_path: Path):
+    exc = JSONParseError("bad", purpose="提案者", attempts=4,
+                         last_output="rust\npub trait X {}")
+    assert _failure_summary(exc) == "json_invalid: model emitted rust outside JSON"
+    _write_bad_output(tmp_path, "ENG-03", exc)
+    assert "pub trait" in (tmp_path / "bad_outputs" / "ENG-03.txt").read_text(
+        encoding="utf-8")
 
 
 def test_dry_run_writes_context(toy_pack: Path):

@@ -30,17 +30,48 @@ from .models import ProviderRegistry
 from .providers import JsonModePolicy, ProviderResponse
 
 T = TypeVar("T", bound=BaseModel)
-_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
+_FENCE_RE = re.compile(r"```([a-zA-Z0-9_-]*)?\s*\n?(.*?)```", re.S)
+
+
+def iter_json_candidates(text: str):
+    """按可信度从模型输出中枚举 JSON object 候选.
+
+    只接受 ```json fenced block 或无语言且内容以 { 开头的 fenced block。
+    ```rust 等代码围栏必须跳过, 避免把 Rust trait/struct 误当 JSON。
+    """
+    for m in _FENCE_RE.finditer(text):
+        lang = (m.group(1) or "").strip().lower()
+        body = m.group(2).strip()
+        if lang and lang != "json":
+            continue
+        if body.startswith("{"):
+            yield body
+    yield from _balanced_object_candidates(text)
 
 
 def extract_json(text: str) -> str:
-    """从模型输出提取 JSON: 优先代码围栏, 其次首个平衡花括号块."""
-    m = _FENCE_RE.search(text)
-    if m:
-        return m.group(1).strip()
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("输出中无 JSON 对象")
+    """从模型输出提取第一个可被 json.loads 解析的 JSON object."""
+    last_error: Exception | None = None
+    for candidate in iter_json_candidates(text):
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+    if last_error:
+        raise ValueError(f"输出中无合法 JSON object: {last_error}")
+    raise ValueError("输出中无 JSON 对象")
+
+
+def _balanced_object_candidates(text: str):
+    for start in [i for i, ch in enumerate(text) if ch == "{"]:
+        candidate = _balanced_object_from(text, start)
+        if candidate:
+            yield candidate
+
+
+def _balanced_object_from(text: str, start: int) -> str:
     depth, in_str, esc = 0, False, False
     for i in range(start, len(text)):
         ch = text[i]
@@ -60,7 +91,7 @@ def extract_json(text: str) -> str:
             depth -= 1
             if depth == 0:
                 return text[start:i + 1]
-    raise ValueError("JSON 花括号不平衡")
+    return ""
 
 
 class LLMClient:

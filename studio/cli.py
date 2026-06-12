@@ -27,7 +27,7 @@ from .core.cards import RepoIndex, atomic_write, replace_card
 from .core.config import StudioConfig, TaskCfg, load_config, load_task
 from .core.gates import check_revision
 from .llm.client import LLMClient
-from .llm.errors import LLMError
+from .llm.errors import JSONParseError, LLMError
 from .logging import RunLogger
 from .loop.planning import PlanningService, RunPlan
 from .loop.runner import CardRunner, Outcome
@@ -223,9 +223,16 @@ def cmd_run(args) -> int:
                 out = runner.run(c, task.stake.get(c.id, task.default_stake))
             except BudgetExceeded:
                 raise
+            except JSONParseError as exc:
+                _write_bad_output(run_dir, c.id, exc)
+                reason = _failure_summary(exc)
+                out = Outcome(c.id, "failed", 0, reason=reason)
+                logger.event("card.failed", reason, card=c.id,
+                             result="failed", error="json_invalid")
             except (LLMError, ValueError, RuntimeError) as exc:
-                out = Outcome(c.id, "failed", 0, reason=str(exc)[:300])
-                logger.event("card.failed", str(exc)[:200], card=c.id,
+                reason = _failure_summary(exc)
+                out = Outcome(c.id, "failed", 0, reason=reason)
+                logger.event("card.failed", reason, card=c.id,
                              result="failed")
             outcomes.append(out)
             plan.mark(c.id, "done" if out.result == "converged" else "failed",
@@ -258,6 +265,28 @@ def _run_mode(args) -> str:
     if args.resume:
         flags.append("resume")
     return "+".join(flags) or "normal"
+
+
+def _failure_summary(exc: Exception) -> str:
+    if isinstance(exc, JSONParseError):
+        text = exc.last_output.lower()
+        if "rust" in text or "pub trait" in text or "pub struct" in text:
+            return "json_invalid: model emitted rust outside JSON"
+        return "json_invalid: model output is not valid JSON"
+    msg = str(exc)
+    if "BLOAT" in msg:
+        return "gate_failed: BLOAT"
+    if "门禁" in msg:
+        return "gate_failed"
+    return msg[:120]
+
+
+def _write_bad_output(run_dir: Path, card_id: str,
+                      exc: JSONParseError) -> None:
+    bad_dir = run_dir / "bad_outputs"
+    bad_dir.mkdir(parents=True, exist_ok=True)
+    path = bad_dir / f"{card_id}.txt"
+    atomic_write(path, exc.last_output[:8000])
 
 
 def _record_agent_memory(work: WorkDir, run_id: str,
@@ -314,6 +343,16 @@ def _write_report(work, run_id, plan: RunPlan, task, outcomes: list[Outcome],
     for o in outcomes:
         lines.append(f"| {o.card_id} | {o.result} | {o.rounds} "
                      f"| {o.best_score:.2f} | {o.reason[:60]} |")
+    failures = [o for o in outcomes if o.result == "failed"]
+    if failures:
+        lines += ["", "## 失败摘要", "", "| 类型 | 数量 | 卡片 |",
+                  "|---|---:|---|"]
+        groups: dict[str, list[str]] = {}
+        for o in failures:
+            key = o.reason.split(":", 1)[0] if o.reason else "failed"
+            groups.setdefault(key, []).append(o.card_id)
+        for key, ids in sorted(groups.items()):
+            lines.append(f"| {key} | {len(ids)} | {', '.join(ids)} |")
     path = work.write_report(run_id, "\n".join(lines) + "\n")
     for e in meter.entries:
         work.append_ledger({"run": run_id, **e})

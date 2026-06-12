@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Issue(BaseModel):
@@ -50,6 +50,13 @@ class Revision(BaseModel):
     card_markdown: str                   # 完整卡片块(### 标题行起)
     responses: list[str] = Field(default_factory=list)  # 逐条指令的落实说明
     expansion_rationale: str = ""        # 非空 = 申请突破膨胀阈值
+
+    @field_validator("card_markdown")
+    @classmethod
+    def _card_markdown_is_card(cls, v: str) -> str:
+        if not v or not v.lstrip().startswith("### "):
+            raise ValueError("card_markdown must start with '### '")
+        return v
 
 
 class PlanTodo(BaseModel):

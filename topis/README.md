@@ -21,5 +21,11 @@ Copyright (c) 2025 FiuAI
 ## 约定
 
 - 议题卡片文件继续只保存设计内容，任务选择、班子、方向放在 `topis/tasks/`；
-- `topis/tasks/*.yaml` 的 `target_files` 仍然相对 `topis/football-docs/`；
-- 新增议题目录时，为对应 pack 更新 `docs_root`，不要在 Python 代码里写死路径。
+- **路径分工**：
+  - CLI `--task` → 相对仓库根，如 `topis/tasks/01-foundation.yaml`；
+  - 任务内 `target_files` → 相对 **`pack.yaml` 的 `docs_root`**
+    （当前 = `topis/football-docs/`），**不是**相对 `topis/` 根；
+  - 因此 `target_files` 里通常**不带** `football-docs/` 前缀，子目录由
+    `docs_root` 承担；
+- 新增议题目录时，为对应 pack 更新 `docs_root` 指向 `topis/<子目录>/`，
+  不要在 Python 代码里写死路径。详见 [`tasks/README.md`](tasks/README.md#路径解析两层不要混)。

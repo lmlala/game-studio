@@ -21,6 +21,10 @@ immutable_files:
   - 00-design-card-spec.md
   - 00a-game-overview.md
 
+# 项目技能目录(相对本文件; 内核 studio/skills_builtin 自动加载, 同 id 项目覆盖内核)
+skills_dirs:
+  - skills
+
 settings:
   context_budget_chars: 36000
   max_rounds_high: 5

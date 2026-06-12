@@ -13,10 +13,13 @@ Copyright (c) 2025 FiuAI
 ```mermaid
 flowchart TD
     subgraph kernel [内核 design-studio: 项目无关]
-        Orch[编排器: 阶段机+轮次循环]
+        Plan[规划阶段: 任务卡→goal/todo]
+        Orch[编排器: 轮次循环]
         RoleRT[角色运行时]
         ToolRT[工具运行时]
         SkillLd[skill 装载器]
+        Ctx[上下文隔离+压缩]
+        Mem[topic/agent 记忆]
         Gates[机器门禁引擎]
         Router[模型路由+成本计量]
         WS[git 工作区]
@@ -37,6 +40,10 @@ flowchart TD
 **复用的实现方式就一句话：内核只认识 schema，不认识游戏。**
 「事件系统卡片」对内核而言只是「一个有五个必填字段、处于 draft 状态、
 有 3 个依赖的设计单元」。换项目 = 换包，内核零改动（README §6 铁律）。
+
+当前实现已拆成七个子包：`core/llm/roles/skills/context/memory/loop`。
+工程事实以 [`../studio/architecture.md`](../studio/architecture.md) 为准；
+本文件保留长期蓝图和后续演进方向。
 
 ## 2. 项目包规范（输入面）
 
@@ -101,14 +108,18 @@ my-ft 的 schema 就是 00 卡片协议的机读版；效率 app 项目可以定
 可审计、可回滚、重启零损失，延续 14 号文档的决策）：
 
 ```text
-<project>/studio-work/
-├── units/            # 设计单元 (markdown + YAML front-matter)
-├── reviews/          # 评审记录: <unit_id>/round-<n>.json
-├── directions/       # 人工方向注入 (steering notes, 见 02 §5)
-├── decisions/        # 决策日志 (ADR 式: 争议裁决的存档)
-├── tasks/            # 工作队列 (来自评估回写/人工/交叉检查)
-├── handoff/          # 交接包输出 (见 03)
-└── ledger/           # 成本台账 + 轮次统计
+work/
+├── runs/<run_id>/
+│   ├── plan.json       # 规划阶段产物: goal/todos/constraints/risks
+│   ├── journal.jsonl   # skill 装载/拒绝、阶段事件
+│   └── report.md       # 运行报告
+├── reviews/<card>/     # 评审记录: round-<n>.json
+├── steering/<card>.md  # 人工方向注入
+├── memory/
+│   ├── agent.jsonl     # agent 自身经验
+│   └── topics/*.jsonl  # topic 级记忆
+├── .cache/llm/         # LLM 响应缓存
+└── ledger.jsonl        # 成本台账
 ```
 
 设计单元文件 = YAML front-matter（机读元数据）+ markdown 正文
@@ -144,6 +155,21 @@ draft ──提交评审──► in_review ──主编判收敛──► refin
 - 状态迁移全部由内核执行并写 git commit（角色只能建议，无直接写权）。
 
 ## 5. 编排器
+
+当前执行顺序已经固定为“先规划、再轮次”：
+
+```text
+load task -> select cards -> PlanningService -> plan.json
+          -> ContextBuilder(role_view) -> CardRunner
+          -> memory/report/ledger
+```
+
+- **规划阶段**：goal 默认由规划者读任务卡、目标卡片清单和 topic 记忆分析
+  得出；任务 YAML 的 `goal:` 只是人工覆盖；dry-run 走 fallback，不调 LLM；
+- **todo 状态机**：`pending -> in_progress -> done/skipped` 只由内核推进；
+  模型只能提出 `focus`，不能决定状态；
+- **角色隔离**：批判者互不可见；提案者不看原始批判和 agent 经验；
+- **skills 装载**：绑定 / 申请 / 触发三路统一经 `SkillLoader` 白名单和预算裁决。
 
 - **两层循环**：外层阶段机（Phase 0-5，见 03）推进项目；内层轮次循环
   （Propose→Critique→Verdict→Revise，见 02）打磨单个单元；

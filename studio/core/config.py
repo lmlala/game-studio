@@ -8,6 +8,8 @@
 
 所有路径在加载时解析为绝对路径(相对配置文件所在目录), 业务代码不再做
 路径推断。任何配置错误在启动期以可读信息失败, 不留到运行中。
+goal 语义: 默认由规划者(planner)读任务卡分析得出; 任务文件里的 goal
+字段是人工覆盖通道(写了就以人工为准)。direction 是临时方向注入。
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SettingsCfg(BaseModel):
@@ -33,6 +35,13 @@ class SettingsCfg(BaseModel):
     max_run_tokens: int = 2_000_000        # 单次 run token 封顶
     dep_excerpt_chars: int = 1200          # 依赖卡节选预算/张
     recent_rounds_in_context: int = 2
+    # 技能装载纪律(中档模型上下文纪律: 渐进披露, 少而精)
+    max_skills_per_role: int = 3           # 单角色单轮装载上限
+    skill_context_chars: int = 6000        # 技能段总字符预算
+    # 记忆注入预算(记忆永远不允许撑爆上下文)
+    topic_memory_chars: int = 1500
+    agent_memory_chars: int = 1000
+    history_round_chars: int = 600         # 单轮摘要压缩后的字符上限
 
 
 class GuardCfg(BaseModel):
@@ -58,6 +67,7 @@ class PackCfg(BaseModel):
     card_files: list[str]                  # 参与解析的卡片文件(glob 相对 docs_root)
     immutable_files: list[str] = Field(default_factory=list)  # 代码级禁改
     work_dir: Optional[Path] = None        # 工作区(相对 pack 目录解析)
+    skills_dirs: list[Path] = Field(default_factory=list)  # 项目技能目录
     settings: SettingsCfg = Field(default_factory=SettingsCfg)
     guards: GuardCfg = Field(default_factory=GuardCfg)
 
@@ -78,12 +88,13 @@ class RoleCfg(BaseModel):
     prompt: str                            # prompts/ 下模板文件名
     focus: str = ""                        # 批判者视角说明(注入模板)
     rubric: list[str] = Field(default_factory=list)  # 评分维度
+    skills: list[str] = Field(default_factory=list)  # 显式绑定的技能 id
     enabled: bool = True
 
     @field_validator("kind")
     @classmethod
     def _kind_ok(cls, v: str) -> str:
-        if v not in {"proposer", "critic", "referee"}:
+        if v not in {"proposer", "critic", "referee", "planner"}:
             raise ValueError(f"未知角色 kind: {v}")
         return v
 
@@ -97,6 +108,13 @@ class CastCfg(BaseModel):
             raise ValueError(f"cast 中 kind={kind} 必须恰好启用 1 个, 实际 {len(hits)}")
         return hits[0]
 
+    def maybe_one(self, kind: str) -> Optional[RoleCfg]:
+        """可选角色(如 planner): 0 个返回 None, 多于 1 个报错."""
+        hits = [r for r in self.roles if r.kind == kind and r.enabled]
+        if len(hits) > 1:
+            raise ValueError(f"cast 中 kind={kind} 至多启用 1 个, 实际 {len(hits)}")
+        return hits[0] if hits else None
+
     def critics(self) -> list[RoleCfg]:
         return [r for r in self.roles if r.kind == "critic" and r.enabled]
 
@@ -104,21 +122,46 @@ class CastCfg(BaseModel):
 class SlotCfg(BaseModel):
     """模型位(models.yaml): 角色通过位名间接绑定模型."""
 
-    provider: str = "openai_compat"        # openai_compat | fake
+    provider: str = "openai_compat"        # deepseek | openai_compat | fake
     base_url: str = ""
     model: str = ""
     api_key_env: str = ""
     temperature: float = 0.2
     max_output_tokens: int = 4096
+    json_mode: bool = False                # provider 是否启用结构化 JSON 模式
+    response_format_supported: bool = False
+    require_json_prompt: bool = False
+    allow_empty_content_retry: bool = False
+    json_repair_attempts: int = 3
+    stream: bool = True                    # 是否尝试流式输出
+    stream_supported: bool = True          # provider/model 是否支持 stream
     price_in_per_m: float = 0.0            # 每百万输入 token 价格(USD), 记账用
     price_out_per_m: float = 0.0
 
     @field_validator("provider")
     @classmethod
     def _provider_ok(cls, v: str) -> str:
-        if v not in {"openai_compat", "fake"}:
+        if v not in {"deepseek", "openai_compat", "fake"}:
             raise ValueError(f"未知 provider: {v}")
         return v
+
+    @model_validator(mode="after")
+    def _provider_defaults(self) -> "SlotCfg":
+        """按 provider 补默认能力; 显式配置仍可覆盖."""
+        is_deepseek = (self.provider == "deepseek"
+                       or "api.deepseek.com" in self.base_url)
+        if is_deepseek:
+            self.json_mode = True if self.json_mode is False else self.json_mode
+            self.response_format_supported = True
+            self.require_json_prompt = True
+            self.allow_empty_content_retry = True
+            self.stream_supported = True
+        if self.provider == "fake":
+            self.stream = False
+            self.stream_supported = False
+        if self.json_repair_attempts < 0:
+            raise ValueError("json_repair_attempts 不能为负")
+        return self
 
 
 class ModelsCfg(BaseModel):
@@ -131,9 +174,15 @@ class ModelsCfg(BaseModel):
 
 
 class TaskCfg(BaseModel):
-    """一次运行的任务定义(topis/tasks/*.yaml)."""
+    """一次运行的任务定义(topis/tasks/*.yaml).
+
+    goal 可选: 写了表示人工覆盖; 不写则由规划阶段从任务卡分析得出。
+    constraints 可选: 本次运行的边界条件(不做什么、保持什么不变)。
+    """
 
     name: str
+    goal: str = ""                         # 人工覆盖目标(可选; 空 = 由规划者分析任务卡得出)
+    constraints: list[str] = Field(default_factory=list)
     target_files: list[str]                # 相对 docs_root
     include_ids: list[str] = Field(default_factory=list)   # 空=文件内全部
     exclude_ids: list[str] = Field(default_factory=list)
@@ -173,11 +222,16 @@ def load_config(pack_dir: Path, work_dir: Optional[Path] = None) -> StudioConfig
     raw["docs_root"] = (pack_dir / raw.get("docs_root", ".")).resolve()
     if raw.get("work_dir"):
         raw["work_dir"] = (pack_dir / raw["work_dir"]).resolve()
+    raw["skills_dirs"] = [
+        (pack_dir / d).resolve() for d in raw.get("skills_dirs", [])]
+    for d in raw["skills_dirs"]:
+        if not d.is_dir():
+            raise FileNotFoundError(f"skills_dirs 目录不存在: {d}")
     pack = PackCfg(**raw)
     cast = CastCfg(**_load_yaml(pack_dir / "cast.yaml"))
     models = ModelsCfg(**_load_yaml(pack_dir / "models.yaml"))
     # 角色引用的模型位与模板必须存在
-    prompts_dir = Path(__file__).parent / "prompts"
+    prompts_dir = Path(__file__).parent.parent / "prompts"
     for role in cast.roles:
         models.slot(role.slot)
         tpl = prompts_dir / role.prompt

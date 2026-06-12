@@ -16,7 +16,7 @@ import pytest
 APP_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP_ROOT))
 
-from studio.config import load_config  # noqa: E402
+from studio.core.config import load_config  # noqa: E402
 
 CARD_A = """### TOY-01 玩具卡片甲
 

@@ -54,6 +54,18 @@ def test_dry_run_writes_context(toy_pack: Path):
     assert "玩具任务目标" in text
 
 
+def test_dry_run_plain_compact_and_no_stream(toy_pack: Path, capsys):
+    task = _write_task(toy_pack)
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--dry-run", "--no-rich", "--compact"]) == 0
+    out = capsys.readouterr().out
+    assert "[stage:start] planning" in out
+    assert "[plan:updated]" in out
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--dry-run", "--no-stream"]) == 0
+    assert capsys.readouterr().out == ""
+
+
 def test_fake_run_converges_and_bumps_status(toy_pack: Path):
     """fake 主编直接判收敛 → draft 卡应被代码升级为 refined 并写回."""
     task = _write_task(toy_pack)

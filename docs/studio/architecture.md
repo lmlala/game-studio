@@ -15,6 +15,7 @@ Copyright (c) 2025 FiuAI
 | `studio/core/` | 配置、卡片解析、机器门禁、抽象接口 | `BaseRole`、`BaseMemory`、`BaseSkillSource` |
 | `studio/llm/` | OpenAI 兼容调用、JSON 修复、缓存、成本预算 | 新模型位只改 `models.yaml` |
 | `studio/cost/` | Usage、价格计算、预算守卫、ledger 账本条目 | provider/model 价格表 |
+| `studio/printing/` | CLI 终端展示，Rich + plain fallback | 新展示格式或主题 |
 | `studio/roles/` | 角色 schema、模板运行时、角色工厂 | `RoleFactory.register(kind, cls)` |
 | `studio/skills/` | skill 解析、注册表、装载裁决 | 新 `BaseSkillSource` |
 | `studio/context/` | 上下文段、压缩、角色隔离视图、裁剪 | `VIEW_SECTIONS`、`TRIM_ORDER` |
@@ -125,7 +126,7 @@ DeepSeek JSON Output 遵守官方要求：provider 层传
 schema 摘要；空 content 按 provider policy 重试。其他 OpenAI-compatible
 模型只有在 slot 显式声明支持时才传 `response_format`。
 
-## 7. 日志、流式输出与 checkpoint
+## 7. 日志、终端展示与 checkpoint
 
 每次 run 写入：
 
@@ -138,7 +139,14 @@ work/runs/<run_id>/
 └── report.md
 ```
 
-终端输出由 `RunLogger` 统一刷出，格式稳定，便于 grep：
+`RunLogger` 只负责结构化事件和文件日志；终端展示交给 `studio/printing/`：
+
+- 默认使用 Rich 输出表格和带样式的阶段行；
+- `--no-rich` 强制 plain 输出；
+- `--compact` 只输出 plan/todo summary；
+- `--no-stream` 不输出终端，只写日志文件。
+
+plain 输出格式稳定，便于 grep：
 
 ```text
 [stage:start] planning

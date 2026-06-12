@@ -129,6 +129,13 @@ pytest                       # 离线测试(不需要 API key)
 和 `report.md`。终端输出由 `RunLogger` 流式刷新；如需后台观察，可执行
 `tail -f work/runs/<run_id>/run.log`。
 
+终端展示默认使用 Rich；如需纯文本或脚本环境，可用：
+
+```bash
+python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml --no-rich --compact
+python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml --no-stream
+```
+
 ## 迁出独立 repo
 
 整个 `game-studio/` 仓库自包含：复制到新 repo 后只需修改

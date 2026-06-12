@@ -71,6 +71,8 @@ Copyright (c) 2025 FiuAI
 - cost 相关逻辑放 `studio/cost/`，不要散落在 provider 或 CLI；
 - 运行状态输出必须走 `RunLogger`，不要在 `cmd_run/CardRunner` 里新增散落
   `print`；
+- 终端展示格式必须放在 `studio/printing/`，不要在业务代码或 logger
+  中直接写 Rich 样式；
 - 每次 todo 状态变化后必须保存 `plan.json`，并记录 checkpoint；
 - 单卡/单角色失败应记录为结构化日志并尽量继续后续卡片，除非是启动期
   配置错误或预算触顶。

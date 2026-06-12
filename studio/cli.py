@@ -34,6 +34,7 @@ from .loop.runner import CardRunner, Outcome
 from .memory.agent import AgentMemory
 from .memory.topic import TopicMemory
 from .memory.workdir import WorkDir
+from .printing import create_printer
 from .roles.factory import RoleFactory
 from .skills.loader import SkillLoader
 from .skills.registry import SkillRegistry
@@ -151,7 +152,11 @@ def cmd_run(args) -> int:
     cards = _select_cards(cfg, repo, task)
     run_id = args.resume or work.new_run_id()
     run_dir = work.run_dir(run_id)
-    logger = RunLogger(run_dir, stream=not args.no_stream)
+    printer = create_printer(stream=not args.no_stream,
+                             no_rich=args.no_rich,
+                             no_color=args.no_color,
+                             compact=args.compact)
+    logger = RunLogger(run_dir, stream=not args.no_stream, printer=printer)
     st = cfg.pack.settings
     meter = CostMeter(st.max_run_usd, st.max_run_tokens)
     client = LLMClient(cfg.models, st, work.cache, meter)
@@ -237,9 +242,9 @@ def cmd_run(args) -> int:
         logger.plan(plan)
         logger.checkpoint(plan_path)
     logger.stage("execute", "done", outcomes=len(outcomes))
-    _write_report(work, run_id, plan, task, outcomes, meter)
+    report_path = _write_report(work, run_id, plan, task, outcomes, meter)
     _record_agent_memory(work, run_id, outcomes)
-    logger.stage("report", "done", path=str(run_dir / "report.md"))
+    logger.report(report_path)
     return 0
 
 
@@ -293,7 +298,7 @@ def _apply_outcome(cfg, repo, work, run_id, card, out: Outcome, args,
 
 
 def _write_report(work, run_id, plan: RunPlan, task, outcomes: list[Outcome],
-                  meter) -> None:
+                  meter):
     lines = [f"# run {run_id} — {task.name}", "",
              f"目标[{plan.source}]: {plan.goal}", ""]
     if plan.risks:
@@ -308,10 +313,10 @@ def _write_report(work, run_id, plan: RunPlan, task, outcomes: list[Outcome],
     for o in outcomes:
         lines.append(f"| {o.card_id} | {o.result} | {o.rounds} "
                      f"| {o.best_score:.2f} | {o.reason[:60]} |")
-    work.write_report(run_id, "\n".join(lines) + "\n")
+    path = work.write_report(run_id, "\n".join(lines) + "\n")
     for e in meter.entries:
         work.append_ledger({"run": run_id, **e})
-    print(f"报告: {work.run_dir(run_id) / 'report.md'}")
+    return path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -340,6 +345,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-git", action="store_true")
     p.add_argument("--no-stream", action="store_true",
                    help="不向终端流式输出, 只写 run 日志文件")
+    p.add_argument("--no-rich", action="store_true",
+                   help="强制使用纯文本输出")
+    p.add_argument("--no-color", action="store_true",
+                   help="禁用终端颜色")
+    p.add_argument("--compact", action="store_true",
+                   help="压缩 plan/todo 输出, 不展示完整表格")
     p.add_argument("--resume", default="",
                    help="从 work/runs/<run_id>/plan.json 断点续跑")
     p.add_argument("--retry-failed", action="store_true",

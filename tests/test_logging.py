@@ -13,10 +13,12 @@ import json
 from studio.core.gates import GateError
 from studio.logging import RunLogger
 from studio.loop.planning import RunPlan, TodoState
+from studio.printing import PlainPrinter
 
 
 def test_run_logger_writes_stdout_jsonl_and_text(tmp_path, capsys):
-    logger = RunLogger(tmp_path, stream=True)
+    logger = RunLogger(tmp_path, stream=True,
+                       printer=PlainPrinter(compact=True))
     plan = RunPlan(goal="g", source="fallback",
                    todos=[TodoState("A-01", status="done"),
                           TodoState("A-02", status="failed")])
@@ -33,3 +35,11 @@ def test_run_logger_writes_stdout_jsonl_and_text(tmp_path, capsys):
         "stage.start", "plan.updated", "gate.rejected"]
     assert events[-1]["errors"][0]["code"] == "PARSE"
     assert "gate:rejected" in (tmp_path / "run.log").read_text(encoding="utf-8")
+
+
+def test_run_logger_no_stream_writes_files_only(tmp_path, capsys):
+    logger = RunLogger(tmp_path, stream=False)
+    logger.stage("planning", "start")
+    assert capsys.readouterr().out == ""
+    assert (tmp_path / "events.jsonl").is_file()
+    assert (tmp_path / "run.log").is_file()

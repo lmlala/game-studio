@@ -43,6 +43,8 @@ Core constraints:
   `studio/llm/models/`; do not hard-code provider behavior in `LLMClient`.
 - Runtime status output must go through `RunLogger`; preserve checkpoint writes
   to `work/runs/<run_id>/plan.json`.
+- Terminal rendering must live in `studio/printing/`; keep Rich styles out of
+  business logic and logger file-writing code.
 
 Required validation after kernel changes:
 

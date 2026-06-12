@@ -14,7 +14,8 @@
 - skills:  技能模型 / 注册表 / 装载裁决
 - context: 上下文组装(角色隔离视图) / 压缩 / 裁剪
 - memory:  工作区 + topic 级记忆 + agent 级记忆
-- logging: 运行时流式输出 + events.jsonl + run.log
+- logging: 结构化事件 + events.jsonl + run.log
+- printing: CLI 终端交互展示(Rich + plain fallback)
 - loop:    轮次循环编排
 """
 

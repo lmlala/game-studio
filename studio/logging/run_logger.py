@@ -14,6 +14,9 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from ..printing import BasePrinter, PlainPrinter
+from ..printing.formatters import format_event_line
+
 
 class RunLogger:
     """单次 run 的日志器.
@@ -24,9 +27,13 @@ class RunLogger:
     - run.log: 人读, 可 tail -f。
     """
 
-    def __init__(self, run_dir: Path, stream: bool = True):
+    def __init__(self, run_dir: Path, stream: bool = True,
+                 printer: BasePrinter | None = None):
         self.run_dir = run_dir
         self.stream = stream
+        self.printer = printer if stream else None
+        if stream and self.printer is None:
+            self.printer = PlainPrinter()
         self.events_path = run_dir / "events.jsonl"
         self.text_path = run_dir / "run.log"
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -34,12 +41,9 @@ class RunLogger:
     # ---------- generic ----------
 
     def event(self, event: str, message: str = "", **fields: Any) -> None:
-        rec = {"ts": time.time(), "event": event, **fields}
-        self._append_jsonl(rec)
-        line = self._format_line(event, message, fields)
-        self._append_text(line)
-        if self.stream:
-            print(line, flush=True)
+        self._record(event, message, fields)
+        if self.printer:
+            self.printer.event(event, message, **fields)
 
     def stage(self, name: str, status: str, **fields: Any) -> None:
         self.event(f"stage.{status}", name, stage=name, **fields)
@@ -59,8 +63,14 @@ class RunLogger:
         msg = " ".join(f"{k}={counts.get(k, 0)}"
                        for k in ("done", "failed", "in_progress",
                                  "pending", "skipped"))
-        self.event("plan.updated", msg, goal=plan.goal, source=plan.source,
-                   counts=counts, todos=[asdict(t) for t in plan.todos])
+        self._record("plan.updated", msg, {
+            "goal": plan.goal,
+            "source": plan.source,
+            "counts": counts,
+            "todos": [asdict(t) for t in plan.todos],
+        })
+        if self.printer:
+            self.printer.plan(plan)
 
     def checkpoint(self, path: Path) -> None:
         self.event("checkpoint.saved", str(path), path=str(path))
@@ -69,8 +79,18 @@ class RunLogger:
         payload = [{"code": getattr(e, "code", ""),
                     "msg": getattr(e, "msg", str(e))}
                    for e in errors]
-        self.event("gate.rejected", f"{card_id} attempt={attempt}",
-                   card=card_id, attempt=attempt, errors=payload)
+        self._record("gate.rejected", f"{card_id} attempt={attempt}", {
+            "card": card_id,
+            "attempt": attempt,
+            "errors": payload,
+        })
+        if self.printer:
+            self.printer.gate(card_id, attempt, payload)
+
+    def report(self, path: Path) -> None:
+        self._record("report.done", str(path), {"path": str(path)})
+        if self.printer:
+            self.printer.report(path)
 
     # ---------- IO ----------
 
@@ -82,13 +102,12 @@ class RunLogger:
         with self.text_path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
 
+    def _record(self, event: str, message: str,
+                fields: dict[str, Any]) -> None:
+        rec = {"ts": time.time(), "event": event, **fields}
+        self._append_jsonl(rec)
+        self._append_text(self._format_line(event, message, fields))
+
     def _format_line(self, event: str, message: str,
                      fields: dict[str, Any]) -> str:
-        bits = [f"[{event.replace('.', ':')}]"]
-        if message:
-            bits.append(str(message))
-        for key in ("card", "round", "role", "result", "decision",
-                    "score", "attempts", "cards", "remaining"):
-            if key in fields and fields[key] not in (None, ""):
-                bits.append(f"{key}={fields[key]}")
-        return " ".join(bits)
+        return format_event_line(event, message, fields)

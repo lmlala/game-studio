@@ -8,7 +8,7 @@
 
 用法示例:
   python -m studio.cli validate --pack packs/my-ft
-  python -m studio.cli run --pack packs/my-ft --task tasks/run-narrative-director.yaml --dry-run
+  python -m studio.cli run --pack packs/my-ft --task topis/tasks/run-narrative-director.yaml --dry-run
   python -m studio.cli steer --pack packs/my-ft DIR-04 "荒诞预算改为按队伍独立"
 """
 

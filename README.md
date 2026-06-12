@@ -8,7 +8,7 @@ Copyright (c) 2025 FiuAI
 
 # design-studio — 设计卡片精修 agent（v1）
 
-把 `football-docs/` 的设计卡片送进「提案 → 多角批判 → 主编裁决 → 修订」
+把 `topis/football-docs/` 的设计卡片送进「提案 → 多角批判 → 主编裁决 → 修订」
 的多轮循环，收敛后写回并升级状态。对应设计文档（随本应用一起迁出）：
 [`docs/m0-design-agent.md`](docs/m0-design-agent.md)（M0/M1 范围）与
 [`docs/framework/`](docs/framework/README.md)（完整框架蓝图）。
@@ -63,7 +63,7 @@ Copyright (c) 2025 FiuAI
 ## 快速开始
 
 ```bash
-cd apps/design-studio
+cd game-studio
 pip install -r requirements.txt
 
 # 1. 自检: 解析全库卡片 + 报告存量协议问题(不阻塞)
@@ -71,15 +71,15 @@ python -m studio.cli validate --pack packs/my-ft
 
 # 2. 干跑: 不调 LLM, 导出每张卡的完整组装上下文供人工检查
 python -m studio.cli run --pack packs/my-ft \
-    --task tasks/01-foundation.yaml --dry-run
+    --task topis/tasks/01-foundation.yaml --dry-run
 
 # 3. 假产出全流程演练(不花钱, 验证 loop/门禁/写回路径)
 python -m studio.cli run --pack packs/my-ft \
-    --task tasks/01-foundation.yaml --fake --no-git
+    --task topis/tasks/01-foundation.yaml --fake --no-git
 
-# 4. 真跑(任务序列与运行手册见 tasks/README.md, 按 01..15 顺序)
+# 4. 真跑(任务序列与运行手册见 topis/tasks/README.md, 按 01..15 顺序)
 export DEEPSEEK_API_KEY=sk-...
-python -m studio.cli run --pack packs/my-ft --task tasks/01-foundation.yaml
+python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml
 
 # 工具
 python -m studio.cli status --pack packs/my-ft
@@ -89,9 +89,9 @@ pytest                       # 离线测试(不需要 API key)
 
 ## 迁出独立 repo
 
-整个 `design-studio/` 目录自包含：复制到新 repo 后只需修改
+整个 `game-studio/` 仓库自包含：复制到新 repo 后只需修改
 `packs/my-ft/pack.yaml` 的 `docs_root` 指向卡片库位置。验收命令：
-`cp -r design-studio /tmp/x && cd /tmp/x && pytest`。
+`cp -r game-studio /tmp/x && cd /tmp/x && pytest`。
 
 ## v2 路线（对应 17-agent-framework 里程碑）
 

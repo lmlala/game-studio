@@ -18,7 +18,7 @@ from conftest import CARD_A
 
 
 def test_roundtrip_real_repo(real_pack_cfg):
-    """对 football-docs 全库: 解析后重组 == 原文; 原样替换 == 原文."""
+    """对 topis/football-docs 全库: 解析后重组 == 原文; 原样替换 == 原文."""
     repo = RepoIndex.build(real_pack_cfg.pack.docs_root,
                            real_pack_cfg.pack.card_files)
     assert len(repo.by_id) >= 80, "应索引到全部 88 张卡片"

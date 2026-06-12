@@ -7,7 +7,7 @@
 
 name: my-ft
 # 相对本文件所在目录; 迁出独立 repo 后只需改这一行
-docs_root: ../../../../football-docs
+docs_root: ../../topis/football-docs
 
 overview_file: 00a-game-overview.md      # 常驻上下文 ⓪ 游戏总览
 protocol_file: 00-design-card-spec.md    # 常驻上下文 ① 卡片协议

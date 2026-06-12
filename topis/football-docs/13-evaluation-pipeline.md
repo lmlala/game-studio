@@ -11,13 +11,13 @@ Copyright (c) 2025 FiuAI
 > 回答「如何后期接入跑模拟、用 LLM 评估爽点/荒诞等关键指标」。
 > 评估管线是设计闭环的另一半：设计卡片声明评估钩子 → 跑批产出数据
 > → 评估打分 → 弱项变成新设计任务（喂给设计 agent，实现与设计见
-> `apps/design-studio/`）。
+> `studio/`）。
 
 ## 闭环总览
 
 ```mermaid
 flowchart LR
-    Cards[设计卡片 football-docs] -->|实现| Sim[Rust 模拟]
+    Cards[设计卡片 topis/football-docs] -->|实现| Sim[Rust 模拟]
     Sim -->|sim_cli batch| Runs[跑批产物: 日志+战报+指标JSON]
     Runs --> Mech[机械指标层 Rust]
     Runs --> Judge[LLM 评估层 Python]
@@ -192,8 +192,8 @@ flowchart LR
 - 弱项识别规则：机械指标超带（按严重度排序）+ LLM 维度分 < 3.5
   的样本聚类（按「最差时刻」的事件类别/引擎归因聚类）+ 漏斗 L1
   的 Reject 样本与高新颖度低分样本（15-mentor §6）；
-- 任务卡生成（写入 `football-docs/_tasks/` 队列，schema 与 agent 的
-  任务消费协议对齐，见 `apps/design-studio/docs/`）：
+- 任务卡生成（写入 `topis/tasks/` 队列，schema 与 agent 的
+  任务消费协议对齐，见 `docs/`）：
   {目标卡片 ID, 证据（指标值/样例引用）, 期望方向, 优先级,
   生成时间}；
 - 人工闸门：任务队列默认由你晨检 5 分钟批准/丢弃后 agent 才执行

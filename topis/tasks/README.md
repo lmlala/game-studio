@@ -46,7 +46,7 @@ Copyright (c) 2025 FiuAI
 ```bash
 # 晚上
 python3 -m studio.cli validate --pack packs/my-ft          # 跑前体检
-python3 -m studio.cli run --pack packs/my-ft --task tasks/NN-xxx.yaml
+python3 -m studio.cli run --pack packs/my-ft --task topis/tasks/NN-xxx.yaml
 # 早上(10-20 分钟)
 #  1. 看 work/runs/<id>/report.md: converged/escalated/failed 一览
 #  2. git diff 审 converged 卡(它们已写回+commit): 不满意 → git revert 单卡

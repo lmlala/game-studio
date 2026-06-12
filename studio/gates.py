@@ -6,7 +6,7 @@
 # Copyright (c) 2025 FiuAI
 """机器门禁: 对 LLM 产出的修订稿做确定性校验, 零 LLM.
 
-原则(见 football-docs/14 AGT-05): 信任模型的产出, 验证模型的产出。
+原则(见 docs/m0-design-agent.md AGT-05): 信任模型的产出, 验证模型的产出。
 所有检查都是纯函数, 返回错误清单; 调用方(rounds)决定拦截或重试。
 """
 

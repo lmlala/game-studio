@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Callable
 
 from ...cost import Usage
 from ...core.config import SlotCfg
@@ -41,7 +42,8 @@ class BaseProvider(ABC):
 
     @abstractmethod
     def complete(self, system: str, user: str,
-                 json_policy: JsonModePolicy) -> ProviderResponse:
+                 json_policy: JsonModePolicy, stream: bool = False,
+                 on_delta: Callable[[str], None] | None = None) -> ProviderResponse:
         """执行一次模型调用."""
 
     def default_json_policy(self) -> JsonModePolicy:

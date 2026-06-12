@@ -80,9 +80,11 @@ class CardRunner:
     builder: ContextBuilder
     fake: bool = False
     logger: RunLogger | None = None
+    show_messages: bool = True
     known_ids: set[str] = field(default_factory=set)
     # 跨轮状态: 角色名 -> 上一轮申请的技能 id
     _skill_requests: dict[str, list[str]] = field(default_factory=dict)
+    _active_messages: set[tuple[str, str]] = field(default_factory=set)
 
     def __post_init__(self) -> None:
         if not self.known_ids:
@@ -118,12 +120,17 @@ class CardRunner:
                                         skills_text=self._skills_for(critic, card))
             self._log("role.start", critic.name, card=card.id,
                       role=critic.name)
+            callback = self._delta_callback(critic.name, card.id)
             try:
-                c: Critique = critic.run(self.client, bundle, fake=self.fake)
+                c: Critique = critic.run(
+                    self.client, bundle, fake=self.fake,
+                    on_delta=callback, stream=self.show_messages)
             except LLMError as exc:
                 self._log("role.failed", str(exc)[:200], card=card.id,
                           role=critic.name, result="failed")
                 continue
+            finally:
+                self._message_end(critic.name, card.id)
             self._skill_requests[critic.name] = list(c.skill_requests)
             kept, n_drop = filter_unevidenced_issues(
                 [i.model_dump() for i in c.issues])
@@ -148,8 +155,13 @@ class CardRunner:
         }
         self._log("role.start", self.referee.name, card=card.id,
                   role=self.referee.name)
-        verdict = self.referee.run(self.client, bundle, extra=extra,
-                                   fake=self.fake)
+        callback = self._delta_callback(self.referee.name, card.id)
+        try:
+            verdict = self.referee.run(
+                self.client, bundle, extra=extra, fake=self.fake,
+                on_delta=callback, stream=self.show_messages)
+        finally:
+            self._message_end(self.referee.name, card.id)
         self._log("role.done", self.referee.name, card=card.id,
                   role=self.referee.name, decision=verdict.decision,
                   directives=len(verdict.directives))
@@ -169,8 +181,14 @@ class CardRunner:
         for attempt in (0, 1):
             self._log("role.start", self.proposer.name, card=current_card.id,
                       role=self.proposer.name, attempt=attempt + 1)
-            rev: Revision = self.proposer.run(self.client, bundle,
-                                              extra=extra, fake=self.fake)
+            callback = self._delta_callback(self.proposer.name,
+                                            current_card.id)
+            try:
+                rev: Revision = self.proposer.run(
+                    self.client, bundle, extra=extra, fake=self.fake,
+                    on_delta=callback, stream=self.show_messages)
+            finally:
+                self._message_end(self.proposer.name, current_card.id)
             self._log("role.done", self.proposer.name, card=current_card.id,
                       role=self.proposer.name, attempt=attempt + 1)
             new_card, errs = check_revision(
@@ -311,3 +329,24 @@ class CardRunner:
     def _log(self, event: str, message: str = "", **fields) -> None:
         if self.logger:
             self.logger.event(event, message, **fields)
+
+    def _delta_callback(self, role: str, card_id: str):
+        if not self.logger or not self.show_messages or self.fake:
+            return None
+
+        started = {"value": False}
+
+        def on_delta(delta: str) -> None:
+            if not started["value"]:
+                self.logger.message_start(role, card_id, purpose=role)
+                started["value"] = True
+                self._active_messages.add((role, card_id))
+            self.logger.message_delta(role, card_id, delta)
+
+        return on_delta
+
+    def _message_end(self, role: str, card_id: str) -> None:
+        key = (role, card_id)
+        if key in self._active_messages and self.logger:
+            self.logger.message_end(role, card_id)
+            self._active_messages.discard(key)

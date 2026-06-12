@@ -126,6 +126,19 @@ DeepSeek JSON Output 遵守官方要求：provider 层传
 schema 摘要；空 content 按 provider policy 重试。其他 OpenAI-compatible
 模型只有在 slot 显式声明支持时才传 `response_format`。
 
+LLM message 流式输出也在 provider 层适配：
+
+```text
+Provider.complete(stream=True, on_delta=...)
+    -> on_delta(token)
+    -> RunLogger.message_delta()
+    -> Printer.message_delta()
+```
+
+如果 provider/model 不支持 stream，会自动回退非流式调用。流式内容只用于
+终端观察，最终仍拼成完整字符串后进入 JSON 解析和 schema 校验。CLI
+`--disable-message` 只关闭 token 展示，不关闭阶段/todo 输出。
+
 ## 7. 日志、终端展示与 checkpoint
 
 每次 run 写入：

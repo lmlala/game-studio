@@ -92,6 +92,22 @@ class RunLogger:
         if self.printer:
             self.printer.report(path)
 
+    def message_start(self, role: str, card: str, purpose: str = "") -> None:
+        self._record("message.start", f"{role} card={card}",
+                     {"role": role, "card": card, "purpose": purpose})
+        if self.printer:
+            self.printer.message_start(role, card, purpose)
+
+    def message_delta(self, role: str, card: str, delta: str) -> None:
+        if self.printer:
+            self.printer.message_delta(delta)
+
+    def message_end(self, role: str, card: str) -> None:
+        self._record("message.end", f"{role} card={card}",
+                     {"role": role, "card": card})
+        if self.printer:
+            self.printer.message_end()
+
     # ---------- IO ----------
 
     def _append_jsonl(self, rec: dict) -> None:

@@ -133,6 +133,8 @@ class SlotCfg(BaseModel):
     require_json_prompt: bool = False
     allow_empty_content_retry: bool = False
     json_repair_attempts: int = 3
+    stream: bool = True                    # 是否尝试流式输出
+    stream_supported: bool = True          # provider/model 是否支持 stream
     price_in_per_m: float = 0.0            # 每百万输入 token 价格(USD), 记账用
     price_out_per_m: float = 0.0
 
@@ -153,6 +155,10 @@ class SlotCfg(BaseModel):
             self.response_format_supported = True
             self.require_json_prompt = True
             self.allow_empty_content_retry = True
+            self.stream_supported = True
+        if self.provider == "fake":
+            self.stream = False
+            self.stream_supported = False
         if self.json_repair_attempts < 0:
             raise ValueError("json_repair_attempts 不能为负")
         return self

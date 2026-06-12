@@ -45,6 +45,8 @@ Core constraints:
   to `work/runs/<run_id>/plan.json`.
 - Terminal rendering must live in `studio/printing/`; keep Rich styles out of
   business logic and logger file-writing code.
+- LLM token streaming must use provider `on_delta` callbacks and
+  `RunLogger.message_delta`; providers must never print directly.
 
 Required validation after kernel changes:
 

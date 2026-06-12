@@ -64,6 +64,8 @@ def test_dry_run_plain_compact_and_no_stream(toy_pack: Path, capsys):
     assert main(["run", "--pack", str(toy_pack), "--task", str(task),
                  "--dry-run", "--no-stream"]) == 0
     assert capsys.readouterr().out == ""
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--dry-run", "--disable-message", "--no-rich"]) == 0
 
 
 def test_fake_run_converges_and_bumps_status(toy_pack: Path):

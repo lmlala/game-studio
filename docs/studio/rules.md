@@ -68,6 +68,8 @@ Copyright (c) 2025 FiuAI
 - DeepSeek JSON Mode 必须按官方文档走 provider policy：
   `response_format={"type":"json_object"}`、prompt 含 `json` 和 JSON 样例、
   空 content 可重试；
+- LLM message 流式输出必须通过 provider `on_delta` 回调进入
+  `RunLogger.message_delta -> studio/printing`，provider 禁止直接 print；
 - cost 相关逻辑放 `studio/cost/`，不要散落在 provider 或 CLI；
 - 运行状态输出必须走 `RunLogger`，不要在 `cmd_run/CardRunner` 里新增散落
   `print`；

@@ -16,7 +16,8 @@ class FakeProvider(BaseProvider):
     name = "fake"
 
     def complete(self, system: str, user: str,
-                 json_policy: JsonModePolicy) -> ProviderResponse:
+                 json_policy: JsonModePolicy, stream: bool = False,
+                 on_delta=None) -> ProviderResponse:
         return ProviderResponse(text="{}", usage=Usage(cached=False,
                                                        provider=self.name,
                                                        model=self.slot.model))

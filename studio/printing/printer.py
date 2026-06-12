@@ -37,6 +37,18 @@ class BasePrinter(ABC):
     def report(self, path: Path) -> None:
         """展示报告路径."""
 
+    @abstractmethod
+    def message_start(self, role: str, card: str, purpose: str = "") -> None:
+        """开始展示模型 message."""
+
+    @abstractmethod
+    def message_delta(self, delta: str) -> None:
+        """展示模型增量 token."""
+
+    @abstractmethod
+    def message_end(self) -> None:
+        """结束模型 message."""
+
 
 class PlainPrinter(BasePrinter):
     """无依赖、管道友好的纯文本输出."""
@@ -58,6 +70,16 @@ class PlainPrinter(BasePrinter):
 
     def report(self, path: Path) -> None:
         print(format_event_line("report.done", str(path)), flush=True)
+
+    def message_start(self, role: str, card: str, purpose: str = "") -> None:
+        label = f"{role} card={card}" + (f" purpose={purpose}" if purpose else "")
+        print(format_event_line("message.start", label), flush=True)
+
+    def message_delta(self, delta: str) -> None:
+        print(delta, end="", flush=True)
+
+    def message_end(self) -> None:
+        print("", flush=True)
 
 
 class RichPrinter(BasePrinter):
@@ -110,3 +132,14 @@ class RichPrinter(BasePrinter):
     def report(self, path: Path) -> None:
         self.console.print(format_event_line("report.done", str(path)),
                            style="bold green", markup=False)
+
+    def message_start(self, role: str, card: str, purpose: str = "") -> None:
+        label = f"{role} card={card}" + (f" purpose={purpose}" if purpose else "")
+        self.console.print(format_event_line("message.start", label),
+                           style="dim", markup=False)
+
+    def message_delta(self, delta: str) -> None:
+        self.console.out(delta, end="")
+
+    def message_end(self) -> None:
+        self.console.out("")

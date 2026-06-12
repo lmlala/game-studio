@@ -208,7 +208,8 @@ def cmd_run(args) -> int:
     runner = CardRunner(cfg=cfg, repo=repo, work=work, client=client,
                         proposer=proposer, critics=critics, referee=referee,
                         task=task, run_id=run_id, skill_loader=loader,
-                        builder=builder, fake=args.fake, logger=logger)
+                        builder=builder, fake=args.fake, logger=logger,
+                        show_messages=not args.disable_message)
     outcomes: list[Outcome] = []
     logger.stage("execute", "start", cards=len(cards))
     try:
@@ -345,6 +346,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-git", action="store_true")
     p.add_argument("--no-stream", action="store_true",
                    help="不向终端流式输出, 只写 run 日志文件")
+    p.add_argument("--disable-message", action="store_true",
+                   help="关闭 LLM message token 流式展示, 保留阶段/todo 输出")
     p.add_argument("--no-rich", action="store_true",
                    help="强制使用纯文本输出")
     p.add_argument("--no-color", action="store_true",

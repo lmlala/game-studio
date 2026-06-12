@@ -89,7 +89,8 @@ class LLMClient:
         return self.cache_dir / f"{h}.json"
 
     def _raw_call(self, slot_name: str, slot: SlotCfg, system: str, user: str,
-                  json_policy: JsonModePolicy) -> ProviderResponse:
+                  json_policy: JsonModePolicy, on_delta=None,
+                  stream: bool = False) -> ProviderResponse:
         cache = self._cache_path(slot, system, user, json_policy)
         if cache.is_file():
             data = json.loads(cache.read_text(encoding="utf-8"))
@@ -99,7 +100,9 @@ class LLMClient:
                           model=data.get("model", slot.model))
             return ProviderResponse(text=data["text"], usage=usage)
         provider = self._provider(slot_name, slot)
-        response = provider.complete(system, user, json_policy)
+        response = provider.complete(system, user, json_policy,
+                                     stream=stream and slot.stream,
+                                     on_delta=on_delta)
         atomic_write(cache, json.dumps({
             "text": response.text,
             "in": response.usage.in_tokens,
@@ -112,7 +115,8 @@ class LLMClient:
     # ---------- 对外 ----------
 
     def complete_json(self, slot_name: str, system: str, user: str,
-                      schema: Type[T], purpose: str) -> T:
+                      schema: Type[T], purpose: str, on_delta=None,
+                      stream: bool = True) -> T:
         """调用并解析为 schema; 按 slot/provider 策略做 JSON 修复重试."""
         slot = self.models.slot(slot_name)
         provider = self._provider(slot_name, slot)
@@ -122,7 +126,8 @@ class LLMClient:
         text = ""
         last_error: Exception | None = None
         for attempt in range(attempts):
-            response = self._raw_call(slot_name, slot, system, user, json_policy)
+            response = self._raw_call(slot_name, slot, system, user, json_policy,
+                                      on_delta=on_delta, stream=stream)
             text = response.text
             self.meter.add(slot_name, _purpose_name(purpose, attempt),
                            response.usage)

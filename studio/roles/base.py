@@ -63,13 +63,15 @@ class TemplatedRole(BaseRole):
         return self.cfg.kind
 
     def run(self, client: LLMClient, bundle,
-            extra: dict[str, str] | None = None, fake: bool = False):
+            extra: dict[str, str] | None = None, fake: bool = False,
+            on_delta=None, stream: bool = True):
         extra = extra or {}
         if fake:
             return self.fake_output(extra)
         system, user = self._prompt(bundle, extra)
         return client.complete_json(self.cfg.slot, system, user, self.schema,
-                                    purpose=self.cfg.name)
+                                    purpose=self.cfg.name,
+                                    on_delta=on_delta, stream=stream)
 
     # ---------- 内部 ----------
 

@@ -133,8 +133,12 @@ pytest                       # 离线测试(不需要 API key)
 
 ```bash
 python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml --no-rich --compact
+python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml --disable-message
 python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml --no-stream
 ```
+
+`--disable-message` 只关闭 LLM token 流式展示，阶段/todo 输出仍保留；
+`--no-stream` 会关闭全部终端输出，仅写 `events.jsonl` 和 `run.log`。
 
 ## 迁出独立 repo
 

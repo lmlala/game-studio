@@ -25,6 +25,9 @@ def test_run_logger_writes_stdout_jsonl_and_text(tmp_path, capsys):
     logger.stage("planning", "start")
     logger.plan(plan)
     logger.gate_rejected("A-02", 1, [GateError("PARSE", "bad json")])
+    logger.message_start("角色", "A-01")
+    logger.message_delta("角色", "A-01", "hello")
+    logger.message_end("角色", "A-01")
     out = capsys.readouterr().out
     assert "[stage:start] planning" in out
     assert "[plan:updated]" in out
@@ -32,8 +35,10 @@ def test_run_logger_writes_stdout_jsonl_and_text(tmp_path, capsys):
               for line in (tmp_path / "events.jsonl").read_text(
                   encoding="utf-8").splitlines()]
     assert [e["event"] for e in events] == [
-        "stage.start", "plan.updated", "gate.rejected"]
-    assert events[-1]["errors"][0]["code"] == "PARSE"
+        "stage.start", "plan.updated", "gate.rejected",
+        "message.start", "message.end"]
+    gate = [e for e in events if e["event"] == "gate.rejected"][0]
+    assert gate["errors"][0]["code"] == "PARSE"
     assert "gate:rejected" in (tmp_path / "run.log").read_text(encoding="utf-8")
 
 

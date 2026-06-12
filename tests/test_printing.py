@@ -24,20 +24,28 @@ def test_plain_printer_outputs_stable_prefix(capsys):
     printer.event("stage.start", "planning")
     printer.plan(_plan())
     printer.gate("A-01", 1, [{"code": "PARSE", "msg": "bad"}])
+    printer.message_start("角色", "A-01")
+    printer.message_delta("hello")
+    printer.message_end()
     out = capsys.readouterr().out
     assert "[stage:start] planning" in out
     assert "[plan:updated]" in out
     assert "[gate:rejected]" in out
+    assert "hello" in out
 
 
 def test_rich_printer_renders_without_error(capsys):
     printer = RichPrinter(no_color=True, compact=True)
     printer.event("card.start", "Card title", card="A-01")
     printer.plan(_plan())
+    printer.message_start("角色", "A-01")
+    printer.message_delta("hello")
+    printer.message_end()
     printer.report(__file__)
     out = capsys.readouterr().out
     assert "card:start" in out
     assert "plan:updated" in out or "[plan]" in out
+    assert "hello" in out
 
 
 def test_create_printer_fallback_modes():

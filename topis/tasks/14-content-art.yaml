@@ -1,6 +1,5 @@
 # 任务 14 — 内容流水线 + 美术定调(产品面收尾)
 name: content-art-v1
-goal: 内容流水线 CNT 与美术 ART 系列收敛, 生产节拍明确
 target_files: [16-content-pipeline.md, 10-art-style.md]
 max_cards: 9
 default_stake: normal

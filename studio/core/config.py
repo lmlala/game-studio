@@ -8,8 +8,8 @@
 
 所有路径在加载时解析为绝对路径(相对配置文件所在目录), 业务代码不再做
 路径推断。任何配置错误在启动期以可读信息失败, 不留到运行中。
-任务文件必须声明 goal(本次运行要达成什么), direction 是临时方向注入,
-两者语义不同: goal 进入所有角色的常驻上下文, direction 只影响本次运行。
+goal 语义: 默认由规划者(planner)读任务卡分析得出; 任务文件里的 goal
+字段是人工覆盖通道(写了就以人工为准)。direction 是临时方向注入。
 """
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ class RoleCfg(BaseModel):
     @field_validator("kind")
     @classmethod
     def _kind_ok(cls, v: str) -> str:
-        if v not in {"proposer", "critic", "referee"}:
+        if v not in {"proposer", "critic", "referee", "planner"}:
             raise ValueError(f"未知角色 kind: {v}")
         return v
 
@@ -107,6 +107,13 @@ class CastCfg(BaseModel):
         if len(hits) != 1:
             raise ValueError(f"cast 中 kind={kind} 必须恰好启用 1 个, 实际 {len(hits)}")
         return hits[0]
+
+    def maybe_one(self, kind: str) -> Optional[RoleCfg]:
+        """可选角色(如 planner): 0 个返回 None, 多于 1 个报错."""
+        hits = [r for r in self.roles if r.kind == kind and r.enabled]
+        if len(hits) > 1:
+            raise ValueError(f"cast 中 kind={kind} 至多启用 1 个, 实际 {len(hits)}")
+        return hits[0] if hits else None
 
     def critics(self) -> list[RoleCfg]:
         return [r for r in self.roles if r.kind == "critic" and r.enabled]
@@ -149,7 +156,7 @@ class TaskCfg(BaseModel):
     """
 
     name: str
-    goal: str                              # 本次运行目标(必填, 非空)
+    goal: str = ""                         # 人工覆盖目标(可选; 空 = 由规划者分析任务卡得出)
     constraints: list[str] = Field(default_factory=list)
     target_files: list[str]                # 相对 docs_root
     include_ids: list[str] = Field(default_factory=list)   # 空=文件内全部
@@ -160,13 +167,6 @@ class TaskCfg(BaseModel):
     direction: str = ""                    # 任务级方向注入(steering)
     critics: list[str] = Field(default_factory=list)       # 班子选拔(空=全部启用)
     rounds: dict[str, int] = Field(default_factory=dict)   # 轮次覆盖 {high, normal}
-
-    @field_validator("goal")
-    @classmethod
-    def _goal_nonempty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("任务必须声明非空 goal(本次运行要达成什么)")
-        return v.strip()
 
 
 class StudioConfig(BaseModel):

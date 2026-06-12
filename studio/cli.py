@@ -26,6 +26,7 @@ from .core.cards import RepoIndex, atomic_write, replace_card
 from .core.config import StudioConfig, TaskCfg, load_config, load_task
 from .core.gates import check_revision
 from .llm.client import BudgetExceeded, CostMeter, LLMClient
+from .loop.planning import PlanningService, RunPlan
 from .loop.runner import CardRunner, Outcome
 from .memory.agent import AgentMemory
 from .memory.topic import TopicMemory
@@ -144,14 +145,24 @@ def cmd_run(args) -> int:
     task = load_task(Path(args.task))
     cards = _select_cards(cfg, repo, task)
     run_id = work.new_run_id()
-    print(f"run {run_id}: 任务={task.name}, 目标={task.goal[:60]}, "
+    st = cfg.pack.settings
+    meter = CostMeter(st.max_run_usd, st.max_run_tokens)
+    client = LLMClient(cfg.models, st, work.cache, meter)
+
+    # 规划阶段: 读任务卡分析 goal/todo(dry-run 不调 LLM, 走确定性回退)
+    planning = PlanningService(work.memory, st.topic_memory_chars)
+    planner = (None if args.dry_run
+               else RoleFactory.build_planner(cfg.cast, cfg.prompts_dir))
+    plan = planning.build(task, cards, planner, client, args.fake)
+    plan_path = work.run_dir(run_id) / "plan.json"
+    plan.save(plan_path)
+    print(f"run {run_id}: 任务={task.name}, 目标[{plan.source}]={plan.goal[:60]}, "
           f"选中 {len(cards)} 张卡片"
           + (" [dry-run]" if args.dry_run else "")
           + (" [fake]" if args.fake else ""))
 
-    st = cfg.pack.settings
     builder = ContextBuilder(repo, cfg, work, task,
-                             agent_mem=AgentMemory(work.memory))
+                             agent_mem=AgentMemory(work.memory), plan=plan)
     if args.dry_run:
         out_dir = work.run_dir(run_id)
         for c in cards:
@@ -165,8 +176,6 @@ def cmd_run(args) -> int:
         st.max_rounds_high = task.rounds["high"]
     if "normal" in task.rounds:
         st.max_rounds_normal = task.rounds["normal"]
-    meter = CostMeter(st.max_run_usd, st.max_run_tokens)
-    client = LLMClient(cfg.models, st, work.cache, meter)
     proposer, critics, referee = RoleFactory.build_cast(
         cfg.cast, cfg.prompts_dir, task.critics)
     loader = SkillLoader(registry, st.max_skills_per_role,
@@ -179,12 +188,20 @@ def cmd_run(args) -> int:
     try:
         for c in cards:
             print(f"  -> {c.id} {c.title}")
+            plan.mark(c.id, "in_progress")
+            plan.save(plan_path)
             out = runner.run(c, task.stake.get(c.id, task.default_stake))
             outcomes.append(out)
+            plan.mark(c.id, "done", out.result)
+            plan.save(plan_path)
             _apply_outcome(cfg, repo, work, run_id, c, out, args)
     except BudgetExceeded as e:
         print(f"!! {e} — 提前结束, 已完成的卡片不受影响")
-    _write_report(work, run_id, task, outcomes, meter)
+        for t in plan.todos:
+            if t.status in {"pending", "in_progress"}:
+                plan.mark(t.card_id, "skipped", "预算触顶")
+        plan.save(plan_path)
+    _write_report(work, run_id, plan, task, outcomes, meter)
     _record_agent_memory(work, run_id, outcomes)
     return 0
 
@@ -223,11 +240,19 @@ def _apply_outcome(cfg, repo, work, run_id, card, out: Outcome, args) -> None:
         print(f"     {out.result}: {out.reason[:80]}")
 
 
-def _write_report(work, run_id, task, outcomes: list[Outcome], meter) -> None:
-    lines = [f"# run {run_id} — {task.name}", "", f"目标: {task.goal}", "",
-             f"卡片数: {len(outcomes)} · LLM 调用: {meter.calls} "
-             f"(缓存命中 {meter.cache_hits}) · 费用: ${meter.total_usd:.4f}", "",
-             "| 卡片 | 结果 | 轮次 | 最佳分 | 说明 |", "|---|---|---|---|---|"]
+def _write_report(work, run_id, plan: RunPlan, task, outcomes: list[Outcome],
+                  meter) -> None:
+    lines = [f"# run {run_id} — {task.name}", "",
+             f"目标[{plan.source}]: {plan.goal}", ""]
+    if plan.risks:
+        lines += ["预判风险: " + "; ".join(plan.risks), ""]
+    lines += ["## 计划执行", "", "| 卡片 | 重点 | 状态 |", "|---|---|---|"]
+    for t in plan.todos:
+        lines.append(f"| {t.card_id} | {t.focus or '-'} "
+                     f"| {t.status}{(' · ' + t.result) if t.result else ''} |")
+    lines += ["", f"卡片数: {len(outcomes)} · LLM 调用: {meter.calls} "
+              f"(缓存命中 {meter.cache_hits}) · 费用: ${meter.total_usd:.4f}", "",
+              "| 卡片 | 结果 | 轮次 | 最佳分 | 说明 |", "|---|---|---|---|---|"]
     for o in outcomes:
         lines.append(f"| {o.card_id} | {o.result} | {o.rounds} "
                      f"| {o.best_score:.2f} | {o.reason[:60]} |")

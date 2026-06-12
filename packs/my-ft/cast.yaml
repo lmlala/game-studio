@@ -9,6 +9,11 @@
 # 每个任务通过 topis/tasks/*.yaml 的 critics 字段选拔本任务班子(空=全员)。
 
 roles:
+  - name: 规划者
+    kind: planner
+    slot: workhorse
+    prompt: planner.md
+
   - name: 提案者
     kind: proposer
     slot: workhorse

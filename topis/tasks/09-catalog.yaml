@@ -1,6 +1,5 @@
 # 任务 09 — 子引擎目录(训练/伤病/媒体/老板/球迷/存档六卡 + 总表)
 name: engine-catalog-v1
-goal: 子引擎目录 CAT 系列收敛, 六大子引擎接口对账完成
 target_files: [04-engine-catalog.md]
 max_cards: 6
 default_stake: normal

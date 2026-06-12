@@ -52,24 +52,35 @@ class ContextBuilder:
 
     def __init__(self, repo: RepoIndex, cfg: StudioConfig, work: WorkDir,
                  task: TaskCfg, topic_mem: TopicMemory | None = None,
-                 agent_mem: AgentMemory | None = None):
+                 agent_mem: AgentMemory | None = None, plan=None):
         self.repo = repo
         self.cfg = cfg
         self.work = work
         self.task = task
         self.topic_mem = topic_mem
         self.agent_mem = agent_mem
+        self.plan = plan                 # RunPlan; None = 直接用任务卡字段
         docs = cfg.pack.docs_root
         self._overview = (docs / cfg.pack.overview_file).read_text(encoding="utf-8")
         self._protocol = (docs / cfg.pack.protocol_file).read_text(encoding="utf-8")
 
     # ---------- 各段生成 ----------
 
-    def _goal_text(self) -> str:
-        lines = [f"目标: {self.task.goal}"]
-        if self.task.constraints:
+    def _goal_text(self, card: Card) -> str:
+        goal = (self.plan.goal if self.plan else self.task.goal) or "(未声明)"
+        constraints = (self.plan.constraints if self.plan
+                       else self.task.constraints)
+        lines = [f"目标: {goal}"]
+        if self.plan:
+            try:
+                focus = self.plan.todo_for(card.id).focus
+            except KeyError:
+                focus = ""
+            if focus:
+                lines.append(f"本卡重点: {focus}")
+        if constraints:
             lines.append("约束:")
-            lines.extend(f"- {c}" for c in self.task.constraints)
+            lines.extend(f"- {c}" for c in constraints)
         return "\n".join(lines)
 
     def _target_text(self, card: Card) -> str:
@@ -128,7 +139,7 @@ class ContextBuilder:
         sections = [
             Section("游戏总览", self._overview, trimmable=False),
             Section("卡片协议", self._protocol, trimmable=False),
-            Section("任务目标", self._goal_text(), trimmable=False),
+            Section("任务目标", self._goal_text(card), trimmable=False),
             Section("目标卡片", self._target_text(card), trimmable=False),
             *[s for s in optional if s.name in visible],
         ]

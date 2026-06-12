@@ -1,6 +1,5 @@
 # 任务 12 — 玩家心理与粘性(动机回路与健康红线)
 name: psychology-v1
-goal: 玩家心理 PSY 系列收敛, 动机回路与健康红线可判定
 target_files: [12-player-psychology.md]
 max_cards: 7
 default_stake: normal

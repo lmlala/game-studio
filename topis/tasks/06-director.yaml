@@ -1,6 +1,5 @@
 # 任务 06 — 主叙事引擎(差异化核心, 全班子高规格)
 name: narrative-director-v1
-goal: 主叙事引擎 DIR 系列收敛, 调度与荒诞预算契约清晰
 target_files: [03-narrative-director.md]
 max_cards: 8
 default_stake: normal

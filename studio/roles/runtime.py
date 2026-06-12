@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 from .base import TemplatedRole
-from .schemas import Critique, Directive, Issue, Revision, Verdict
+from .schemas import (Critique, Directive, Issue, Plan, Revision,
+                      Verdict)
 
 
 class CriticRole(TemplatedRole):
@@ -49,6 +50,20 @@ class ProposerRole(TemplatedRole):
                         expansion_rationale="")
 
 
+class PlannerRole(TemplatedRole):
+    """规划者: 读任务卡分析出 goal/todo/约束; 产出 Plan.
+
+    todos 的 card_id 合法性由 planning 层校验补全 —— 信任产出, 验证产出。
+    """
+
+    schema = Plan
+
+    def fake_output(self, extra: dict[str, str]) -> Plan:
+        return Plan(goal=f"[fake] 完成任务 {extra.get('TASK_NAME', '?')} "
+                         f"全部目标卡片的精修收敛",
+                    todos=[], constraints=[], risks=[])
+
+
 # 供测试构造最小 Verdict/Directive 的便捷再导出
-__all__ = ["CriticRole", "RefereeRole", "ProposerRole",
-           "Critique", "Verdict", "Revision", "Directive", "Issue"]
+__all__ = ["CriticRole", "RefereeRole", "ProposerRole", "PlannerRole",
+           "Critique", "Verdict", "Revision", "Directive", "Issue", "Plan"]

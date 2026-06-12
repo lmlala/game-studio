@@ -12,9 +12,12 @@ Copyright (c) 2025 FiuAI
 > 下游卡上下文里的依赖节选质量更高，批判更准。每晚跑一个任务，串行执行
 > （工作区是文件态，并行任务会互踩）。
 
-任务文件必填字段：`name`、`goal`（本次运行要达成什么，注入所有角色
-上下文并作为主编裁决基准）、`target_files`；可选 `constraints`（边界
-条件清单）、`direction`（临时方向注入）、`critics`/`stake`/`rounds`。
+任务文件必填字段：`name`、`target_files`。**goal 默认不用写**——run
+开始时由规划者（planner 角色）读任务卡 + 目标卡片清单 + 主题记忆，
+分析出本次 goal、逐卡 todo（focus）与约束，落盘 `runs/<id>/plan.json`
+并注入所有角色上下文；任务文件里写 `goal:` 则是人工覆盖（不调规划者）。
+可选字段：`constraints`、`direction`（规划与执行的方向输入）、
+`critics`/`stake`/`rounds`。
 
 ## 执行顺序与班子
 

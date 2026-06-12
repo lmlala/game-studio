@@ -1,6 +1,5 @@
 # 任务 07 — 比赛系统(可信度红线 + 叙事钩子的平衡)
 name: match-v1
-goal: 比赛系统 MAT 系列收敛, 可信度与叙事钩子达到平衡
 target_files: [09-match-system.md]
 max_cards: 7
 default_stake: normal

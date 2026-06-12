@@ -1,6 +1,5 @@
 # 任务 13 — 评估管线(指标与 LLM 评估的可实现性)
 name: evaluation-v1
-goal: 评估管线 EVAL 系列收敛, 指标与任务回写闭环可实现
 target_files: [13-evaluation-pipeline.md]
 max_cards: 6
 default_stake: normal

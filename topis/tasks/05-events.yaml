@@ -1,6 +1,5 @@
 # 任务 05 — 事件系统(内容生产的 schema 地基)
 name: events-v1
-goal: 事件系统 EVT 系列收敛, 事件 schema 可支撑内容生产
 target_files: [05-event-system.md]
 max_cards: 7
 default_stake: normal

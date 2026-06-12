@@ -88,7 +88,9 @@ class CardRunner:
     # ---------- 技能装载 ----------
 
     def _skills_for(self, role: BaseRole, card: Card) -> str:
-        trigger_text = card.raw + "\n" + self.task.goal
+        goal = (self.builder.plan.goal if self.builder.plan
+                else self.task.goal)
+        trigger_text = card.raw + "\n" + goal
         decision = self.skill_loader.decide(
             role.kind, role.name, getattr(role, "cfg").skills,
             self._skill_requests.get(role.name, []), trigger_text)

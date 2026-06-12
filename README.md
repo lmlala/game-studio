@@ -38,7 +38,7 @@ Copyright (c) 2025 FiuAI
 | `studio/skills/` | 技能模型（markdown+front-matter）、注册表（内核+项目包聚合）、装载裁决（绑定>申请>触发，预算封顶） |
 | `studio/context/` | 上下文组装：**角色隔离视图**、轮次摘要提取式压缩、预算裁剪 |
 | `studio/memory/` | 工作区（reviews/steering/ledger/runs）+ **topic 级记忆** + **agent 级经验记忆** |
-| `studio/loop/` | 轮次循环：收敛判定、振荡检测、分数回退回滚、保守写回、记忆写入 |
+| `studio/loop/` | **规划阶段**（读任务卡分析 goal/todo，plan.json 落盘）+ 轮次循环：收敛判定、振荡检测、分数回退回滚、保守写回、记忆写入 |
 | `studio/skills_builtin/` | 内核通用技能（项目无关方法论）；项目技能放 `packs/*/skills/` |
 | `studio/cli.py` | `validate / status / steer / skills / memory / run` 六个子命令 |
 
@@ -47,6 +47,16 @@ Copyright (c) 2025 FiuAI
 - **确定性路由（主路径）**：技能 front-matter 的 `triggers` 命中目标卡正文或任务目标 → 自动装载；cast.yaml 角色可显式绑定 `skills: [id]`；
 - **角色自主申请（辅路径）**：批判者在产出 JSON 的 `skill_requests` 中按 id 申请，下一轮经白名单与预算校验后装载——模型有自主权，内核有否决权；
 - 纪律：单角色单轮 ≤ `max_skills_per_role`(3)，技能段 ≤ `skill_context_chars` 字符；角色 prompt 常驻只有技能索引行（渐进披露），命中才装全文。
+
+## 规划阶段（goal 与 todo 从任务卡分析得出）
+
+run 开始先规划再执行，goal 来源三级：
+
+1. **manual**：任务 YAML 写了 `goal:` → 人工覆盖，不调规划者；
+2. **planner**：cast 配置了规划者角色 → LLM 读任务卡 + 目标卡片清单 + 主题记忆，产出 `{goal, todos[{card_id, focus}], constraints, risks}`，内核校验补全（未知卡丢弃、缺失卡补齐）；
+3. **fallback**：无规划者时确定性推导（dry-run 也走这条，零 LLM 成本）。
+
+计划落盘 `work/runs/<id>/plan.json`，todo 状态（pending/in_progress/done/skipped）由内核随执行推进——不信任模型自报；每卡的 focus 注入该卡的 `<<<任务目标>>>` 段；run 报告含计划执行表。
 
 ## 上下文：裁剪 · 压缩 · 隔离
 

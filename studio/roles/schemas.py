@@ -50,3 +50,19 @@ class Revision(BaseModel):
     card_markdown: str                   # 完整卡片块(### 标题行起)
     responses: list[str] = Field(default_factory=list)  # 逐条指令的落实说明
     expansion_rationale: str = ""        # 非空 = 申请突破膨胀阈值
+
+
+class PlanTodo(BaseModel):
+    """规划者为单张卡片给出的工作项(状态由内核管理, 不信任模型自报)."""
+
+    card_id: str
+    focus: str = ""                      # 本卡的评审/修订重点, 注入该卡上下文
+
+
+class Plan(BaseModel):
+    """规划者产出: agent 读任务卡后分析出的目标与执行计划."""
+
+    goal: str                            # 一句话: 本次运行要达成什么
+    todos: list[PlanTodo] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)   # 预判的风险/分歧点

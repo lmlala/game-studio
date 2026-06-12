@@ -1,6 +1,5 @@
 # 任务 10 — 玩家代理感(动词表与回敬回路, 体验侧核心)
 name: agency-v1
-goal: 玩家代理感 AGY 系列收敛, 动词表与杠杆诚实可验收
 target_files: [19-player-agency.md]
 max_cards: 6
 default_stake: normal

@@ -1,6 +1,5 @@
 # 任务 11 — UX 交互(信息架构与周循环)
 name: ux-v1
-goal: UX 交互 UX 系列收敛, 信息架构与周循环可出原型
 target_files: [11-ux-interaction.md]
 max_cards: 7
 default_stake: normal

@@ -13,7 +13,7 @@ from typing import Type
 
 from ..core.config import CastCfg, RoleCfg
 from .base import TemplatedRole
-from .runtime import CriticRole, ProposerRole, RefereeRole
+from .runtime import CriticRole, PlannerRole, ProposerRole, RefereeRole
 
 
 class RoleFactory:
@@ -23,6 +23,7 @@ class RoleFactory:
         "proposer": ProposerRole,
         "critic": CriticRole,
         "referee": RefereeRole,
+        "planner": PlannerRole,
     }
 
     @classmethod
@@ -54,3 +55,10 @@ class RoleFactory:
             pool = [by_name[n] for n in critic_names]
         critics = [cls.create(r, prompts_dir) for r in pool]
         return proposer, critics, referee
+
+    @classmethod
+    def build_planner(cls, cast: CastCfg,
+                      prompts_dir: Path) -> TemplatedRole | None:
+        """规划者可选: 未配置时返回 None(planning 层走确定性回退)."""
+        cfg = cast.maybe_one("planner")
+        return cls.create(cfg, prompts_dir) if cfg else None

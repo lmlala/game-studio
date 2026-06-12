@@ -1,6 +1,5 @@
 # 任务 15 — 全库巡检(第二遍 pass: 全部 refined 后跑, 只挑跨卡问题)
 name: global-sweep-v1
-goal: 全库跨卡一致性巡检, 清零术语漂移与接口不对账
 target_files:
   - 01-engine-overview.md
   - 02-worldview.md

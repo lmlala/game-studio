@@ -111,15 +111,26 @@ def test_task_rounds_override(toy_pack: Path):
     assert t.rounds == {"high": 2, "normal": 1}
 
 
-def test_task_goal_required(toy_pack: Path):
-    """goal 缺失或为空的任务必须在加载期失败."""
-    p = toy_pack / "bad-task.yaml"
-    p.write_text("name: bad\ntarget_files: [cards.md]\n", encoding="utf-8")
-    try:
-        load_task(p)
-        raise AssertionError("缺 goal 的任务应当报错")
-    except Exception as e:
-        assert "goal" in str(e)
+def test_task_goal_optional(toy_pack: Path):
+    """goal 是可选的人工覆盖: 不写由规划阶段分析得出."""
+    p = toy_pack / "no-goal-task.yaml"
+    p.write_text("name: ng\ntarget_files: [cards.md]\n", encoding="utf-8")
+    t = load_task(p)
+    assert t.goal == ""
+
+
+def test_fake_run_writes_plan(toy_pack: Path):
+    """run 必须先产出计划: plan.json 落盘且 todo 全部完成."""
+    import json
+    task = _write_task(toy_pack)
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--fake", "--no-git"]) == 0
+    cfg = load_config(toy_pack)
+    plans = sorted(WorkDir(cfg.work_dir).runs.rglob("plan.json"))
+    assert plans, "run 应落盘 plan.json"
+    plan = json.loads(plans[-1].read_text(encoding="utf-8"))
+    assert plan["goal"] == "玩具任务目标" and plan["source"] == "manual"
+    assert all(t["status"] == "done" for t in plan["todos"])
 
 
 def test_context_budget_trims(toy_pack: Path):

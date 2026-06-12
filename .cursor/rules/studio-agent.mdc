@@ -1,0 +1,50 @@
+---
+description: Studio design-agent repository rules
+globs:
+  - "studio/**/*.py"
+  - "studio/**/*.md"
+  - "packs/**/*.yaml"
+  - "packs/**/*.md"
+  - "topis/tasks/**/*.yaml"
+  - "docs/studio/**/*.md"
+alwaysApply: false
+---
+
+<!--
+Project: my-ft
+Created Date: 2026-06-12
+Author: liming
+Email: lmlala@aliyun.com
+Copyright (c) 2025 FiuAI
+-->
+
+# Studio agent rules
+
+Read these docs before changing `studio/`, `packs/*`, or `topis/tasks/`:
+
+1. `docs/studio/README.md`
+2. `docs/studio/architecture.md`
+3. `docs/studio/rules.md`
+
+Core constraints:
+
+- `studio/` is project-agnostic kernel code. Keep my-ft domain facts in
+  `topis/football-docs/`, `topis/tasks/`, or `packs/my-ft/`.
+- Run planning before execution. `topis/tasks/*.yaml` normally should not set
+  `goal`; `goal` is derived by planner/fallback unless explicitly overridden.
+- Roles cannot write files. Card writes must go through `CardRunner -> gates ->
+  atomic_write`.
+- Skills use markdown + YAML front-matter. Generic skills go in
+  `studio/skills_builtin/`; project skills go in `packs/<pack>/skills/`.
+- Context changes must define role visibility, trim policy, and tests.
+- Memory is append-only jsonl with deterministic digest; do not summarize memory
+  with an LLM.
+
+Required validation after kernel changes:
+
+```bash
+python3 -m pytest
+python3 -m studio.cli validate --pack packs/my-ft
+python3 -m studio.cli skills --pack packs/my-ft
+python3 -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml --dry-run
+```

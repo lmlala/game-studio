@@ -10,6 +10,7 @@ Copyright (c) 2025 FiuAI
 
 把 `topis/football-docs/` 的设计卡片送进「提案 → 多角批判 → 主编裁决 → 修订」
 的多轮循环，收敛后写回并升级状态。对应设计文档（随本应用一起迁出）：
+[`docs/studio/`](docs/studio/README.md)（当前实现索引）、
 [`docs/m0-design-agent.md`](docs/m0-design-agent.md)（M0/M1 范围）与
 [`docs/framework/`](docs/framework/README.md)（完整框架蓝图）。
 

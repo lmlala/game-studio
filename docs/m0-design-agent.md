@@ -20,6 +20,10 @@ Copyright (c) 2025 FiuAI
 >
 > 位置说明：本文件与 framework/ 是 **design-studio 的软件设计文档**，
 > 不属于游戏设计，故从 topis/football-docs 迁至此处，随应用一起迁出仓库。
+>
+> 当前实现说明：代码已超过 M0，增加了 planner、skills、角色隔离上下文、
+> topic/agent 记忆与子包拆分。当前工程事实见
+> [`studio/`](studio/README.md)，本文件保留 M0 的原始决策与约束。
 
 ## 为什么这个场景适合自写
 

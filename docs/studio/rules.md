@@ -34,6 +34,10 @@ Copyright (c) 2025 FiuAI
 - `goal` 默认由规划阶段读任务卡分析得出；
 - `topis/tasks/*.yaml` 里的 `goal:` 只是人工覆盖，日常任务不要写；
 - 任务卡必须至少有 `name` 与 `target_files`；
+- `target_files` 相对 `pack.yaml` 的 `docs_root`（当前 my-ft =
+  `topis/football-docs/`），**不是**相对 `topis/` 根；通常不带
+  `football-docs/` 前缀；
+- CLI `--task` 才写完整路径，如 `topis/tasks/01-foundation.yaml`；
 - `direction` 是规划输入和临时方向，不等同于最终 goal；
 - `plan.json` 是运行事实，todo 状态只能由内核更新。
 

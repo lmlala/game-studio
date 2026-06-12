@@ -54,7 +54,9 @@ def _select_cards(cfg: StudioConfig, repo: RepoIndex, task: TaskCfg) -> list:
         if str(path) in immutable:
             raise ValueError(f"任务目标是禁改文件: {rel}")
         if path not in repo.files:
-            raise ValueError(f"任务目标未被索引(检查 pack.card_files): {rel}")
+            raise ValueError(
+                f"任务目标未被索引: {rel} "
+                f"(相对 docs_root={cfg.pack.docs_root.name}/ 解析为 {path})")
         for c in repo.files[path].cards:
             if task.include_ids and c.id not in task.include_ids:
                 continue

@@ -19,6 +19,38 @@ Copyright (c) 2025 FiuAI
 可选字段：`constraints`、`direction`（规划与执行的方向输入）、
 `critics`/`stake`/`rounds`。
 
+## 路径解析（两层，不要混）
+
+| 路径类型 | 写法示例 | 解析基准 |
+| --- | --- | --- |
+| 任务卡本身 | `--task topis/tasks/01-foundation.yaml` | 仓库根目录 |
+| 目标设计文档 | `target_files: [01-engine-overview.md]` | **`pack.yaml` 的 `docs_root`**，不是 `topis/` 根 |
+
+当前 my-ft 的 `packs/my-ft/pack.yaml` 已设置：
+
+```yaml
+docs_root: ../../topis/football-docs
+```
+
+因此任务里写 `01-engine-overview.md` 实际解析为
+`topis/football-docs/01-engine-overview.md`。**不需要**在 `target_files`
+里再写 `football-docs/` 前缀——子目录名已经包含在 `docs_root` 里。
+
+```text
+topis/
+├── football-docs/          ← pack.docs_root 指向这里
+│   └── 01-engine-overview.md
+└── tasks/
+    └── 01-foundation.yaml  ← target_files: [01-engine-overview.md]
+                              相对 football-docs/，不是相对 topis/
+```
+
+若以后新增第二个议题目录（如 `topis/other-game/`），正确做法是：
+
+1. 新建 pack（或改 `docs_root` 指向 `topis/other-game/`）；
+2. 该 pack 下的任务 `target_files` 仍只写文件名或该目录内相对路径；
+3. **不要**在 Python 里写死 `football-docs` 字符串。
+
 ## 执行顺序与班子
 
 | # | 任务 | 目标 | 班子（除提案者/主编外） | 高危卡(5轮) | 估算调用 |

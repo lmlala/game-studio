@@ -6,7 +6,7 @@ Email: lmlala@aliyun.com
 Copyright (c) 2025 FiuAI
 -->
 
-# football-docs — 设计卡片工作区
+# topis/football-docs — 设计卡片工作区
 
 > 本目录是 **设计精修工作区**：把游戏的全部设计拆成统一格式的「设计卡片」，
 > 供人和设计 agent 共同迭代。它不立即替换 `docs/`；当某张卡片达到 `locked`
@@ -15,13 +15,13 @@ Copyright (c) 2025 FiuAI
 ## 定位
 
 - 读者一：**你自己**（开发者），用来做设计决策和实现对照。
-- 读者二：**设计 agent**（实现与软件设计见 `apps/design-studio/`），
+- 读者二：**设计 agent**（实现与软件设计见 `studio/`），
   按 [`00-design-card-spec.md`](00-design-card-spec.md) 的协议逐卡精修。
 - 读者三：**评估管线**（见 [`13-evaluation-pipeline.md`](13-evaluation-pipeline.md)），
   按卡片中的「评估钩子」生成模拟指标与 LLM 评分，反向产生新的设计任务。
 
 > 边界说明：本目录只放**游戏设计**。设计 agent 自身的软件设计文档
-> 已迁至 `apps/design-studio/docs/`（随应用一起迁出仓库）。
+> 已迁至 `docs/`（随应用一起迁出仓库）。
 
 ## 文件索引
 
@@ -49,7 +49,7 @@ Copyright (c) 2025 FiuAI
 | [`20-golden-scenario.md`](20-golden-scenario.md) | **黄金样例**：替补门将的怨恨——纵切 worked example（团队对齐 + 回归基线） | 样例文档 |
 
 （原 `14-design-agent.md` 与 `17-agent-framework/` 属于工具的软件
-设计，已迁至 `apps/design-studio/docs/`，编号 14/17 保留空缺。）
+设计，已迁至 `docs/`，编号 14/17 保留空缺。）
 
 ## 推荐阅读顺序
 
@@ -58,7 +58,7 @@ Copyright (c) 2025 FiuAI
 3. 叙事主线：`03` → `05` → `06` → `07`；
 4. 模拟基座：`08` → `09`；
 5. 产品面：`02` → `10` → `11` → `12`；
-6. 工具链：`13` → `15`（思路稿）→ `16`；agent 软件设计在 `apps/design-studio/docs/`。
+6. 工具链：`13` → `15`（思路稿）→ `16`；agent 软件设计在 `docs/`。
 
 ## 团队导读（假想把文档交给一个完整团队时的分工读法）
 
@@ -78,7 +78,7 @@ Copyright (c) 2025 FiuAI
 ## 与现有 docs/ 和 rust/ 的关系
 
 - `docs/` 是当前已实现/已验收内容的权威记录，**不要让 agent 直接改写**。
-- `football-docs/` 是设计前沿。卡片状态机：`draft → refined → reviewed → locked`。
+- `topis/football-docs/` 是设计前沿。卡片状态机：`draft → refined → reviewed → locked`。
 - `locked` 卡片由人工合并进 `docs/` 对应文件，并按 `docs/AGENTS.md` 要求更新 changelog。
 - 冲突时以 `00-design-card-spec.md` 的全局原则为最高约束。
 - **对现有 `rust/` 代码：卡片是目标态规格，实现可以完全重构对齐卡片**，

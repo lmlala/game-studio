@@ -103,8 +103,8 @@ Rule(
 ### 3.4 规则树的「可设计性」
 
 - 每条规则 = 一个小设计件：`{id, 版本, 动机说明, 表达式, 预期通过率带}`，
-  存 `football-docs/_rules/`（或 `rust/config/rules/`），与卡片库同 git 流程；
-- 设计 agent（apps/design-studio）可以起草规则：从 LLM 终评报告的「最差时刻」模式
+  存 `topis/football-docs/_rules/`（或 `rust/config/rules/`），与卡片库同 git 流程；
+- 设计 agent（studio）可以起草规则：从 LLM 终评报告的「最差时刻」模式
   反推否决型规则草案（§5 规则蒸馏），人工批准后入库；
 - 每条规则带**预期通过率带**：跑批后实际通过率超带即告警——规则本身
   也被评估（规则烂大街或永不触发都是规则的 bug）；

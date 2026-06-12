@@ -6,7 +6,7 @@
 #
 # 角色班子 v2: 提案者 + 5 个批判者 + 主编。
 # focus 字段会注入 critic.md 的 system 段, 即该角色的完整 system prompt。
-# 每个任务通过 tasks/*.yaml 的 critics 字段选拔本任务班子(空=全员)。
+# 每个任务通过 topis/tasks/*.yaml 的 critics 字段选拔本任务班子(空=全员)。
 
 roles:
   - name: 提案者

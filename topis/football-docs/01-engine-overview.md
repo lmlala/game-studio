@@ -167,7 +167,7 @@ pub trait JudgmentEngine {
 状态: draft · 优先级: P1 · 依赖: ENG-04
 
 **目的**：把"跑批模拟 + 指标 + LLM 评估"作为一等公民固化在架构里，
-而不是事后脚本。这是设计 agent 闭环（apps/design-studio）的输入端。
+而不是事后脚本。这是设计 agent 闭环（studio）的输入端。
 
 **设计理念**：G5、G8。一个人没有 QA 团队，评估装置就是 QA；它必须便宜
 （无头、可并行、增量）且与游戏代码零耦合。

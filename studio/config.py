@@ -131,7 +131,7 @@ class ModelsCfg(BaseModel):
 
 
 class TaskCfg(BaseModel):
-    """一次运行的任务定义(tasks/*.yaml)."""
+    """一次运行的任务定义(topis/tasks/*.yaml)."""
 
     name: str
     target_files: list[str]                # 相对 docs_root

@@ -8,7 +8,7 @@ Copyright (c) 2025 FiuAI
 
 # META — 设计卡片协议与全局原则
 
-> 本文件是 football-docs 的「宪法」：定义卡片格式（供设计 agent 解析）、
+> 本文件是 topis/football-docs 的「宪法」：定义卡片格式（供设计 agent 解析）、
 > 全局设计原则（任何卡片不得违反）、统一术语表（防止 agent 改写时术语漂移）。
 
 ## 1. 卡片格式（机器可解析）

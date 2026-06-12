@@ -6,7 +6,7 @@
 # Copyright (c) 2025 FiuAI
 """记忆与工作区: 一切持久状态都是文件.
 
-三层记忆(见 football-docs/14 设计):
+三层记忆(见 docs/m0-design-agent.md 设计):
 - 卡片本身 = 长期状态(由 cards 模块管理);
 - reviews/<卡>/round-N.json = 情景记忆(每轮全部角色发言与裁决);
 - ledger.jsonl + runs/<id>/ = 成本台账与运行报告。

@@ -6,7 +6,7 @@
 # Copyright (c) 2025 FiuAI
 """卡片解析与无损回写.
 
-协议来源: football-docs/00-design-card-spec.md。
+协议来源: topis/football-docs/00-design-card-spec.md。
 设计要点: 文件被切成 [前导段, 卡片段, 间隔段...] 的行区间; 修订只替换
 目标卡片的行区间, 其余字节原样保留 → round-trip 无损是单测硬指标。
 """

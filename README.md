@@ -28,19 +28,40 @@ Copyright (c) 2025 FiuAI
 未收敛(escalate/振荡/回退/轮次顶) → 最佳候选稿存 runs/<id>/candidates/ 等人工
 ```
 
-## 模块地图
+## 模块地图（子包结构）
 
-| 模块 | 职责 |
+| 子包 | 职责 |
 | --- | --- |
-| `studio/config.py` | pack/cast/models/task 四类配置的加载与校验（pydantic） |
-| `studio/cards.py` | 卡片解析与**无损回写**（行区间替换 + 原子写），RepoIndex 全库索引 |
-| `studio/gates.py` | 机器门禁：五字段/状态机/ID 不可变/可判定词/悬挂引用/术语漂移/膨胀 |
-| `studio/context.py` | 上下文组装：总览+协议(不可裁) + 目标卡+方向 + 依赖节选 + 相邻卡 + 轮次摘要(可裁) |
-| `studio/llm.py` | OpenAI 兼容客户端：重试退避、JSON 提取+修复重试、磁盘缓存、成本预算 |
-| `studio/roles.py` | 角色运行时：Critique/Verdict/Revision 三个产出 schema + 模板渲染 + fake 产出 |
-| `studio/rounds.py` | 轮次循环：收敛判定、振荡检测、分数回退回滚、保守写回策略 |
-| `studio/memory.py` | 工作区：reviews 轮次记录、steering 方向、ledger 台账、run 日志与报告 |
-| `studio/cli.py` | `validate / status / steer / run` 四个子命令 |
+| `studio/core/` | 配置加载校验、卡片解析与**无损回写**、机器门禁、抽象接口（BaseRole/BaseMemory/BaseSkillSource） |
+| `studio/llm/` | OpenAI 兼容客户端：重试退避、JSON 提取+修复重试、磁盘缓存、成本预算 |
+| `studio/roles/` | 产出 schema + 模板角色基类 + 具体角色（批判/主编/提案）+ **RoleFactory**（新角色种类在此注册） |
+| `studio/skills/` | 技能模型（markdown+front-matter）、注册表（内核+项目包聚合）、装载裁决（绑定>申请>触发，预算封顶） |
+| `studio/context/` | 上下文组装：**角色隔离视图**、轮次摘要提取式压缩、预算裁剪 |
+| `studio/memory/` | 工作区（reviews/steering/ledger/runs）+ **topic 级记忆** + **agent 级经验记忆** |
+| `studio/loop/` | 轮次循环：收敛判定、振荡检测、分数回退回滚、保守写回、记忆写入 |
+| `studio/skills_builtin/` | 内核通用技能（项目无关方法论）；项目技能放 `packs/*/skills/` |
+| `studio/cli.py` | `validate / status / steer / skills / memory / run` 六个子命令 |
+
+## 技能自主调用（两级模型）
+
+- **确定性路由（主路径）**：技能 front-matter 的 `triggers` 命中目标卡正文或任务目标 → 自动装载；cast.yaml 角色可显式绑定 `skills: [id]`；
+- **角色自主申请（辅路径）**：批判者在产出 JSON 的 `skill_requests` 中按 id 申请，下一轮经白名单与预算校验后装载——模型有自主权，内核有否决权；
+- 纪律：单角色单轮 ≤ `max_skills_per_role`(3)，技能段 ≤ `skill_context_chars` 字符；角色 prompt 常驻只有技能索引行（渐进披露），命中才装全文。
+
+## 上下文：裁剪 · 压缩 · 隔离
+
+- **隔离**：批判者并列互不可见；提案者只见主编指令、不见原始批判、不注入代理经验；每个角色按 `VIEW_SECTIONS` 取自己的视图；
+- **压缩**：轮次历史用提取式摘要（裁决+采纳指令+高严重度 issue），零 LLM 成本、确定可重放；完整现场在 `work/reviews/<卡>/`；
+- **裁剪**：超预算按 代理经验→主题记忆→轮次摘要→相邻卡→依赖节选 顺序砍半再清空；总览/协议/任务目标/目标卡/技能永不裁剪。
+
+## 记忆分层
+
+| 层 | 位置 | 内容 |
+| --- | --- | --- |
+| 长期状态 | 卡片本身 | 设计事实（core.cards 管理） |
+| 情景记忆 | `work/reviews/<卡>/round-N.json` | 每轮完整发言与裁决 |
+| **主题记忆** | `work/memory/topics/<议题文件>.jsonl` | 收敛结论、escalate 原因、defer 的开放问题——下次跑同主题时注入上下文 |
+| **代理经验** | `work/memory/agent.jsonl` | 收敛率、门禁高频拒收码、人工沉淀的 lesson——注入批判者/主编上下文 |
 
 ## 关键机制速查
 
@@ -83,6 +104,8 @@ python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yam
 
 # 工具
 python -m studio.cli status --pack packs/my-ft
+python -m studio.cli skills --pack packs/my-ft          # 技能清单(加载即校验)
+python -m studio.cli memory --pack packs/my-ft          # 代理经验+主题记忆摘要
 python -m studio.cli steer --pack packs/my-ft DIR-04 "荒诞预算改为按队伍独立"
 pytest                       # 离线测试(不需要 API key)
 ```

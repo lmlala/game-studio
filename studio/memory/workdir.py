@@ -6,9 +6,11 @@
 # Copyright (c) 2025 FiuAI
 """记忆与工作区: 一切持久状态都是文件.
 
-三层记忆(见 docs/m0-design-agent.md 设计):
-- 卡片本身 = 长期状态(由 cards 模块管理);
+记忆分层(见 docs/m0-design-agent.md 设计):
+- 卡片本身 = 长期状态(由 core.cards 管理);
 - reviews/<卡>/round-N.json = 情景记忆(每轮全部角色发言与裁决);
+- memory/topics/<主题>.jsonl = 主题记忆(topic.py);
+- memory/agent.jsonl = 代理自身经验(agent.py);
 - ledger.jsonl + runs/<id>/ = 成本台账与运行报告。
 """
 
@@ -19,7 +21,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from .cards import atomic_write
+from ..core.cards import atomic_write
 
 
 class WorkDir:
@@ -30,9 +32,11 @@ class WorkDir:
         self.reviews = root / "reviews"
         self.steering = root / "steering"
         self.runs = root / "runs"
+        self.memory = root / "memory"
         self.cache = root / ".cache" / "llm"
         self.ledger = root / "ledger.jsonl"
-        for d in (self.reviews, self.steering, self.runs, self.cache):
+        for d in (self.reviews, self.steering, self.runs,
+                  self.memory, self.cache):
             d.mkdir(parents=True, exist_ok=True)
 
     # ---------- 轮次记录(情景记忆) ----------

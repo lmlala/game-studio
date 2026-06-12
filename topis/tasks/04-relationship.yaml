@@ -1,5 +1,6 @@
 # 任务 04 — 关系与派系(图算法主场, 工程确定性重点审查)
 name: relationship-v1
+goal: 关系与派系 REL 系列收敛, 图算法与预算边界明确
 target_files: [07-relationship-system.md]
 max_cards: 6
 default_stake: normal

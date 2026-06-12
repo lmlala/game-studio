@@ -1,5 +1,6 @@
 # 任务 01 — 架构与确定性地基(被所有系统依赖, 必须最先收敛)
 name: foundation-v1
+goal: ENG/SEED 地基卡全部收敛到可直接写 Rust 类型与测试的精度
 target_files: [01-engine-overview.md, 08-seed-system.md]
 max_cards: 11
 default_stake: normal

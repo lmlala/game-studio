@@ -1,5 +1,6 @@
 # 任务 03 — 人物系统(叙事的原子, 在关系/事件之前收敛)
 name: actor-v1
+goal: 人物系统 ACT 系列收敛, 人物状态与记忆接口可实现
 target_files: [06-actor-system.md]
 max_cards: 7
 default_stake: normal

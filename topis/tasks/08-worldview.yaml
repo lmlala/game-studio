@@ -1,5 +1,6 @@
 # 任务 08 — 世界观(内容侧地基: 地区/标签/势力/荒诞边界)
 name: worldview-v1
+goal: 世界观 WV 系列收敛, 地区/标签/势力设定可生成内容
 target_files: [02-worldview.md]
 max_cards: 6
 default_stake: normal

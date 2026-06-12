@@ -29,6 +29,7 @@ roles:
       卡片 ID 是否真实存在。你不评游戏设计品味, 只评规范与自洽。
       证据必须引用: 原则编号、术语表词条、依赖卡原句或目标卡原句。
     rubric: ["协议合规", "全局一致性", "可判定性"]
+    skills: [decidable-acceptance]
 
   - name: 叙事批判者
     kind: critic
@@ -66,6 +67,7 @@ roles:
       接受带, 否则违反 NUM-06 三色制; (7)反膨胀红线 NUM-07。
       证据必须引用: NUM 卡条款编号与目标卡中的具体数值。
     rubric: ["量纲合规", "堆叠与带宽", "配额一致", "可校准性"]
+    skills: [systems-balance]
 
   - name: 体验批判者
     kind: critic
@@ -85,6 +87,7 @@ roles:
       什么, 冲突时是否按 系统叙事>FM疲劳>创作者>轻度 仲裁。
       证据必须引用: AGY/PSY/UX 卡条款、总览画像、目标卡原句。
     rubric: ["代理感", "可读性", "动机回路", "画像覆盖"]
+    skills: [sdt-motivation]
 
   - name: 工程批判者
     kind: critic
@@ -103,6 +106,7 @@ roles:
       破坏存读等价; (6)实现复杂度是否与 G8 副业产能匹配, 有无更简
       单的等效实现。证据必须引用: ENG/SEED/CAT 卡条款与目标卡原句。
     rubric: ["确定性", "架构合规", "预算与性能", "实现成本"]
+    skills: [deterministic-sim]
 
   - name: 主编
     kind: referee

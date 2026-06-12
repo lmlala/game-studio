@@ -10,9 +10,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from studio.cards import RepoIndex, parse_block, parse_file, replace_card
-from studio.config import GuardCfg
-from studio.gates import check_revision
+from studio.core.cards import RepoIndex, parse_block, parse_file, replace_card
+from studio.core.config import GuardCfg
+from studio.core.gates import check_revision
 
 from conftest import CARD_A
 

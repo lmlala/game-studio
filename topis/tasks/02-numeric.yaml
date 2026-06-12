@@ -1,5 +1,6 @@
 # 任务 02 — 数值宪法自精修(其余任务的数值批判依据, 第二个收敛)
 name: numeric-constitution-v1
+goal: 数值宪法 NUM 系列自洽收敛, 成为后续所有数值批判的依据
 target_files: [18-numeric-design.md]
 max_cards: 7
 default_stake: high

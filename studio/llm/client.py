@@ -25,8 +25,8 @@ from typing import Optional, Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from .cards import atomic_write
-from .config import ModelsCfg, SettingsCfg, SlotCfg
+from ..core.cards import atomic_write
+from ..core.config import ModelsCfg, SettingsCfg, SlotCfg
 
 T = TypeVar("T", bound=BaseModel)
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)

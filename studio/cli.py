@@ -4,37 +4,43 @@
 # Author: liming
 # Email: lmlala@aliyun.com
 # Copyright (c) 2025 FiuAI
-"""CLI 入口: validate / run / status / steer.
+"""CLI 入口: validate / run / status / steer / skills / memory.
 
 用法示例:
   python -m studio.cli validate --pack packs/my-ft
-  python -m studio.cli run --pack packs/my-ft --task topis/tasks/run-narrative-director.yaml --dry-run
+  python -m studio.cli run --pack packs/my-ft --task topis/tasks/01-foundation.yaml --dry-run
+  python -m studio.cli skills --pack packs/my-ft
+  python -m studio.cli memory --pack packs/my-ft [--topic 05-event-system]
   python -m studio.cli steer --pack packs/my-ft DIR-04 "荒诞预算改为按队伍独立"
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
 from pathlib import Path
 
-from .cards import RepoIndex, atomic_write, replace_card
-from .config import StudioConfig, TaskCfg, load_config, load_task
-from .context import build_bundle
-from .gates import check_revision
-from .llm import BudgetExceeded, CostMeter, LLMClient
-from .memory import WorkDir
-from .roles import Role
-from .rounds import CardRunner, Outcome
+from .context.builder import ContextBuilder
+from .core.cards import RepoIndex, atomic_write, replace_card
+from .core.config import StudioConfig, TaskCfg, load_config, load_task
+from .core.gates import check_revision
+from .llm.client import BudgetExceeded, CostMeter, LLMClient
+from .loop.runner import CardRunner, Outcome
+from .memory.agent import AgentMemory
+from .memory.topic import TopicMemory
+from .memory.workdir import WorkDir
+from .roles.factory import RoleFactory
+from .skills.loader import SkillLoader
+from .skills.registry import SkillRegistry
 
 
-def _setup(pack: str) -> tuple[StudioConfig, RepoIndex, WorkDir]:
+def _setup(pack: str) -> tuple[StudioConfig, RepoIndex, WorkDir, SkillRegistry]:
     cfg = load_config(Path(pack))
     repo = RepoIndex.build(cfg.pack.docs_root, cfg.pack.card_files)
     work = WorkDir(cfg.work_dir)
-    return cfg, repo, work
+    registry = SkillRegistry.build(cfg.pack.skills_dirs)
+    return cfg, repo, work, registry
 
 
 def _select_cards(cfg: StudioConfig, repo: RepoIndex, task: TaskCfg) -> list:
@@ -65,7 +71,7 @@ def _select_cards(cfg: StudioConfig, repo: RepoIndex, task: TaskCfg) -> list:
 
 
 def cmd_validate(args) -> int:
-    cfg, repo, _ = _setup(args.pack)
+    cfg, repo, _, _ = _setup(args.pack)
     n_err = 0
     for card in repo.by_id.values():
         _, errs = check_revision(card, card.raw, set(repo.by_id),
@@ -80,7 +86,7 @@ def cmd_validate(args) -> int:
 
 
 def cmd_status(args) -> int:
-    cfg, repo, work = _setup(args.pack)
+    cfg, repo, work, _ = _setup(args.pack)
     for c in sorted(repo.by_id.values(), key=lambda x: x.id):
         rounds = work.round_count(c.id)
         steer = "S" if work.load_steering(c.id) else " "
@@ -89,9 +95,41 @@ def cmd_status(args) -> int:
 
 
 def cmd_steer(args) -> int:
-    cfg, _, work = _setup(args.pack)
+    cfg, _, work, _ = _setup(args.pack)
     path = work.steer(args.card_id, args.message)
     print(f"已写入方向: {path}")
+    return 0
+
+
+def cmd_skills(args) -> int:
+    """列出全部技能(加载即校验, 坏技能在此显式失败)."""
+    _, _, _, registry = _setup(args.pack)
+    if not registry.by_id:
+        print("无已注册技能")
+        return 0
+    for s in sorted(registry.by_id.values(), key=lambda x: x.id):
+        roles = ",".join(s.applies_to_roles) or "全角色"
+        trig = ",".join(s.triggers) or "-"
+        print(f"{s.id:24s} v{s.version} {s.chars:5d}字 角色[{roles}] 触发[{trig}]")
+    print(f"skills: {len(registry.by_id)} 个技能可用")
+    return 0
+
+
+def cmd_memory(args) -> int:
+    """查看 agent 经验与主题记忆摘要."""
+    cfg, _, work, _ = _setup(args.pack)
+    st = cfg.pack.settings
+    agent = AgentMemory(work.memory)
+    print("== 代理经验 ==")
+    print(agent.digest(st.agent_memory_chars) or "(空)")
+    topics_dir = work.memory / "topics"
+    names = ([args.topic] if args.topic else
+             sorted(p.stem for p in topics_dir.glob("*.jsonl"))
+             if topics_dir.is_dir() else [])
+    for name in names:
+        print(f"\n== 主题记忆: {name} ==")
+        print(TopicMemory(work.memory, name).digest(st.topic_memory_chars)
+              or "(空)")
     return 0
 
 
@@ -102,45 +140,41 @@ def _git_commit(repo_root: Path, path: Path, card_id: str, msg: str) -> None:
 
 
 def cmd_run(args) -> int:
-    cfg, repo, work = _setup(args.pack)
+    cfg, repo, work, registry = _setup(args.pack)
     task = load_task(Path(args.task))
     cards = _select_cards(cfg, repo, task)
     run_id = work.new_run_id()
-    print(f"run {run_id}: 任务={task.name}, 选中 {len(cards)} 张卡片"
+    print(f"run {run_id}: 任务={task.name}, 目标={task.goal[:60]}, "
+          f"选中 {len(cards)} 张卡片"
           + (" [dry-run]" if args.dry_run else "")
           + (" [fake]" if args.fake else ""))
 
+    st = cfg.pack.settings
+    builder = ContextBuilder(repo, cfg, work, task,
+                             agent_mem=AgentMemory(work.memory))
     if args.dry_run:
         out_dir = work.run_dir(run_id)
         for c in cards:
-            bundle = build_bundle(c, repo, cfg, work, task)
+            bundle = builder.build(c, role_view="critic")
             p = out_dir / f"dryrun-{c.id}.md"
             atomic_write(p, bundle.render())
             print(f"  {c.id}: 上下文 {bundle.total_chars} 字符 -> {p}")
         return 0
 
-    # 任务级覆盖: 轮次上限
     if "high" in task.rounds:
-        cfg.pack.settings.max_rounds_high = task.rounds["high"]
+        st.max_rounds_high = task.rounds["high"]
     if "normal" in task.rounds:
-        cfg.pack.settings.max_rounds_normal = task.rounds["normal"]
-    meter = CostMeter(cfg.pack.settings.max_run_usd,
-                      cfg.pack.settings.max_run_tokens)
-    client = LLMClient(cfg.models, cfg.pack.settings, work.cache, meter)
-    proposer = Role(cfg.cast.one("proposer"), cfg.prompts_dir)
-    referee = Role(cfg.cast.one("referee"), cfg.prompts_dir)
-    # 任务级覆盖: 班子选拔(空 = 全部启用的批判者)
-    pool = cfg.cast.critics()
-    if task.critics:
-        by_name = {r.name: r for r in pool}
-        missing = [n for n in task.critics if n not in by_name]
-        if missing:
-            raise ValueError(f"任务指定的批判者不存在于 cast: {missing}")
-        pool = [by_name[n] for n in task.critics]
-    critics = [Role(r, cfg.prompts_dir) for r in pool]
+        st.max_rounds_normal = task.rounds["normal"]
+    meter = CostMeter(st.max_run_usd, st.max_run_tokens)
+    client = LLMClient(cfg.models, st, work.cache, meter)
+    proposer, critics, referee = RoleFactory.build_cast(
+        cfg.cast, cfg.prompts_dir, task.critics)
+    loader = SkillLoader(registry, st.max_skills_per_role,
+                         st.skill_context_chars)
     runner = CardRunner(cfg=cfg, repo=repo, work=work, client=client,
                         proposer=proposer, critics=critics, referee=referee,
-                        task=task, run_id=run_id, fake=args.fake)
+                        task=task, run_id=run_id, skill_loader=loader,
+                        builder=builder, fake=args.fake)
     outcomes: list[Outcome] = []
     try:
         for c in cards:
@@ -151,7 +185,22 @@ def cmd_run(args) -> int:
     except BudgetExceeded as e:
         print(f"!! {e} — 提前结束, 已完成的卡片不受影响")
     _write_report(work, run_id, task, outcomes, meter)
+    _record_agent_memory(work, run_id, outcomes)
     return 0
+
+
+def _record_agent_memory(work: WorkDir, run_id: str,
+                         outcomes: list[Outcome]) -> None:
+    if not outcomes:
+        return
+    gate_codes = []
+    for o in outcomes:
+        gate_codes.extend(e.split("]")[0].strip("[") for e in o.gate_errors if e)
+    AgentMemory(work.memory).record_run(
+        run_id, total=len(outcomes),
+        converged=sum(1 for o in outcomes if o.result == "converged"),
+        gate_errors=gate_codes,
+        dropped_unevidenced=sum(o.dropped_issues for o in outcomes))
 
 
 def _apply_outcome(cfg, repo, work, run_id, card, out: Outcome, args) -> None:
@@ -175,7 +224,7 @@ def _apply_outcome(cfg, repo, work, run_id, card, out: Outcome, args) -> None:
 
 
 def _write_report(work, run_id, task, outcomes: list[Outcome], meter) -> None:
-    lines = [f"# run {run_id} — {task.name}", "",
+    lines = [f"# run {run_id} — {task.name}", "", f"目标: {task.goal}", "",
              f"卡片数: {len(outcomes)} · LLM 调用: {meter.calls} "
              f"(缓存命中 {meter.cache_hits}) · 费用: ${meter.total_usd:.4f}", "",
              "| 卡片 | 结果 | 轮次 | 最佳分 | 说明 |", "|---|---|---|---|---|"]
@@ -191,10 +240,15 @@ def _write_report(work, run_id, task, outcomes: list[Outcome], meter) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="studio", description="设计卡片精修 agent")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name, fn in [("validate", cmd_validate), ("status", cmd_status)]:
+    for name, fn in [("validate", cmd_validate), ("status", cmd_status),
+                     ("skills", cmd_skills)]:
         p = sub.add_parser(name)
         p.add_argument("--pack", required=True)
         p.set_defaults(fn=fn)
+    p = sub.add_parser("memory")
+    p.add_argument("--pack", required=True)
+    p.add_argument("--topic", default="")
+    p.set_defaults(fn=cmd_memory)
     p = sub.add_parser("steer")
     p.add_argument("--pack", required=True)
     p.add_argument("card_id")

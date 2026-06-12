@@ -10,17 +10,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from studio.cards import RepoIndex
 from studio.cli import main
-from studio.config import load_config, load_task
-from studio.context import build_bundle
-from studio.memory import WorkDir
+from studio.context.builder import ContextBuilder
+from studio.core.cards import RepoIndex
+from studio.core.config import load_config, load_task
+from studio.memory.workdir import WorkDir
 
 
 def _write_task(pack: Path, **over) -> Path:
     p = pack / "task.yaml"
-    lines = ["name: toy-task", "target_files: [cards.md]", "max_cards: 8",
-             "default_stake: normal"]
+    lines = ["name: toy-task", "goal: 玩具任务目标", "target_files: [cards.md]",
+             "max_cards: 8", "default_stake: normal"]
     for k, v in over.items():
         lines.append(f"{k}: {v}")
     p.write_text("\n".join(lines), encoding="utf-8")
@@ -42,8 +42,10 @@ def test_dry_run_writes_context(toy_pack: Path):
     dumps = list(work.rglob("dryrun-TOY-01.md"))
     assert dumps, "dry-run 应导出上下文文件"
     text = dumps[0].read_text(encoding="utf-8")
-    for section in ["游戏总览", "卡片协议", "目标卡片", "同文件相邻卡片"]:
+    for section in ["游戏总览", "卡片协议", "任务目标", "目标卡片",
+                    "同文件相邻卡片"]:
         assert section in text
+    assert "玩具任务目标" in text
 
 
 def test_fake_run_converges_and_bumps_status(toy_pack: Path):
@@ -72,10 +74,9 @@ def test_steer_appears_in_context(toy_pack: Path):
     cfg = load_config(toy_pack)
     repo = RepoIndex.build(cfg.pack.docs_root, cfg.pack.card_files)
     work = WorkDir(cfg.work_dir)
-    task_path = _write_task(toy_pack)
-    bundle = build_bundle(repo.by_id["TOY-01"], repo, cfg, work,
-                          load_task(task_path))
-    rendered = bundle.render()
+    task = load_task(_write_task(toy_pack))
+    builder = ContextBuilder(repo, cfg, work, task)
+    rendered = builder.build(repo.by_id["TOY-01"]).render()
     assert "改为按队伍独立预算" in rendered
     assert "人工方向" in rendered
 
@@ -105,10 +106,20 @@ def test_task_critic_selection(toy_pack: Path):
 
 
 def test_task_rounds_override(toy_pack: Path):
-    from studio.config import load_task
     task_path = _write_task(toy_pack, rounds="{high: 2, normal: 1}")
     t = load_task(task_path)
     assert t.rounds == {"high": 2, "normal": 1}
+
+
+def test_task_goal_required(toy_pack: Path):
+    """goal 缺失或为空的任务必须在加载期失败."""
+    p = toy_pack / "bad-task.yaml"
+    p.write_text("name: bad\ntarget_files: [cards.md]\n", encoding="utf-8")
+    try:
+        load_task(p)
+        raise AssertionError("缺 goal 的任务应当报错")
+    except Exception as e:
+        assert "goal" in str(e)
 
 
 def test_context_budget_trims(toy_pack: Path):
@@ -119,7 +130,8 @@ def test_context_budget_trims(toy_pack: Path):
     repo = RepoIndex.build(cfg.pack.docs_root, cfg.pack.card_files)
     work = WorkDir(cfg.work_dir)
     task = load_task(_write_task(toy_pack))
-    bundle = build_bundle(repo.by_id["TOY-02"], repo, cfg, work, task)
+    builder = ContextBuilder(repo, cfg, work, task)
+    bundle = builder.build(repo.by_id["TOY-02"])
     assert bundle.total_chars <= 1200
     names = [s.name for s in bundle.sections if s.text.strip()]
     assert "游戏总览" in names and "卡片协议" in names

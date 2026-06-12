@@ -8,6 +8,8 @@
 
 所有路径在加载时解析为绝对路径(相对配置文件所在目录), 业务代码不再做
 路径推断。任何配置错误在启动期以可读信息失败, 不留到运行中。
+任务文件必须声明 goal(本次运行要达成什么), direction 是临时方向注入,
+两者语义不同: goal 进入所有角色的常驻上下文, direction 只影响本次运行。
 """
 
 from __future__ import annotations
@@ -33,6 +35,13 @@ class SettingsCfg(BaseModel):
     max_run_tokens: int = 2_000_000        # 单次 run token 封顶
     dep_excerpt_chars: int = 1200          # 依赖卡节选预算/张
     recent_rounds_in_context: int = 2
+    # 技能装载纪律(中档模型上下文纪律: 渐进披露, 少而精)
+    max_skills_per_role: int = 3           # 单角色单轮装载上限
+    skill_context_chars: int = 6000        # 技能段总字符预算
+    # 记忆注入预算(记忆永远不允许撑爆上下文)
+    topic_memory_chars: int = 1500
+    agent_memory_chars: int = 1000
+    history_round_chars: int = 600         # 单轮摘要压缩后的字符上限
 
 
 class GuardCfg(BaseModel):
@@ -58,6 +67,7 @@ class PackCfg(BaseModel):
     card_files: list[str]                  # 参与解析的卡片文件(glob 相对 docs_root)
     immutable_files: list[str] = Field(default_factory=list)  # 代码级禁改
     work_dir: Optional[Path] = None        # 工作区(相对 pack 目录解析)
+    skills_dirs: list[Path] = Field(default_factory=list)  # 项目技能目录
     settings: SettingsCfg = Field(default_factory=SettingsCfg)
     guards: GuardCfg = Field(default_factory=GuardCfg)
 
@@ -78,6 +88,7 @@ class RoleCfg(BaseModel):
     prompt: str                            # prompts/ 下模板文件名
     focus: str = ""                        # 批判者视角说明(注入模板)
     rubric: list[str] = Field(default_factory=list)  # 评分维度
+    skills: list[str] = Field(default_factory=list)  # 显式绑定的技能 id
     enabled: bool = True
 
     @field_validator("kind")
@@ -131,9 +142,15 @@ class ModelsCfg(BaseModel):
 
 
 class TaskCfg(BaseModel):
-    """一次运行的任务定义(topis/tasks/*.yaml)."""
+    """一次运行的任务定义(topis/tasks/*.yaml).
+
+    goal 必填: 一句话说清本次运行要达成什么(注入所有角色上下文);
+    constraints 可选: 本次运行的边界条件(不做什么、保持什么不变)。
+    """
 
     name: str
+    goal: str                              # 本次运行目标(必填, 非空)
+    constraints: list[str] = Field(default_factory=list)
     target_files: list[str]                # 相对 docs_root
     include_ids: list[str] = Field(default_factory=list)   # 空=文件内全部
     exclude_ids: list[str] = Field(default_factory=list)
@@ -143,6 +160,13 @@ class TaskCfg(BaseModel):
     direction: str = ""                    # 任务级方向注入(steering)
     critics: list[str] = Field(default_factory=list)       # 班子选拔(空=全部启用)
     rounds: dict[str, int] = Field(default_factory=dict)   # 轮次覆盖 {high, normal}
+
+    @field_validator("goal")
+    @classmethod
+    def _goal_nonempty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("任务必须声明非空 goal(本次运行要达成什么)")
+        return v.strip()
 
 
 class StudioConfig(BaseModel):
@@ -173,11 +197,16 @@ def load_config(pack_dir: Path, work_dir: Optional[Path] = None) -> StudioConfig
     raw["docs_root"] = (pack_dir / raw.get("docs_root", ".")).resolve()
     if raw.get("work_dir"):
         raw["work_dir"] = (pack_dir / raw["work_dir"]).resolve()
+    raw["skills_dirs"] = [
+        (pack_dir / d).resolve() for d in raw.get("skills_dirs", [])]
+    for d in raw["skills_dirs"]:
+        if not d.is_dir():
+            raise FileNotFoundError(f"skills_dirs 目录不存在: {d}")
     pack = PackCfg(**raw)
     cast = CastCfg(**_load_yaml(pack_dir / "cast.yaml"))
     models = ModelsCfg(**_load_yaml(pack_dir / "models.yaml"))
     # 角色引用的模型位与模板必须存在
-    prompts_dir = Path(__file__).parent / "prompts"
+    prompts_dir = Path(__file__).parent.parent / "prompts"
     for role in cast.roles:
         models.slot(role.slot)
         tpl = prompts_dir / role.prompt

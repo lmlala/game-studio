@@ -10,17 +10,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from studio.cards import RepoIndex
 from studio.cli import main
-from studio.config import load_config, load_task
-from studio.context import build_bundle
-from studio.memory import WorkDir
+from studio.cli import _failure_summary, _write_bad_output
+from studio.context.builder import ContextBuilder
+from studio.core.cards import RepoIndex
+from studio.core.config import load_config, load_task
+from studio.memory.workdir import WorkDir
+from studio.llm.errors import JSONParseError
+from studio.loop.runner import _gate_repair_directive
+from studio.core.gates import GateError
+
+from conftest import CARD_A
 
 
 def _write_task(pack: Path, **over) -> Path:
     p = pack / "task.yaml"
-    lines = ["name: toy-task", "target_files: [cards.md]", "max_cards: 8",
-             "default_stake: normal"]
+    lines = ["name: toy-task", "goal: 玩具任务目标", "target_files: [cards.md]",
+             "max_cards: 8", "default_stake: normal"]
     for k, v in over.items():
         lines.append(f"{k}: {v}")
     p.write_text("\n".join(lines), encoding="utf-8")
@@ -34,6 +40,34 @@ def test_validate_and_status(toy_pack: Path, capsys):
     assert "TOY-01" in out and "TOY-02" in out
 
 
+def test_run_id_has_subsecond_entropy(tmp_path: Path):
+    work = WorkDir(tmp_path / "work")
+    ids = {work.new_run_id() for _ in range(3)}
+    assert len(ids) == 3
+
+
+def test_gate_repair_directive_includes_bloat_budget():
+    from studio.core.cards import parse_block
+
+    old = parse_block(CARD_A)
+    bad = CARD_A + "\n扩写。" * 200
+    text = _gate_repair_directive(
+        [GateError("BLOAT", "too large"),
+         GateError("VAGUE_ACCEPTANCE", "含 尽量")],
+        old, bad, bloat_ratio=1.5)
+    assert "阈值" in text and "禁止新增大段 Rust 代码" in text
+    assert "VAGUE_ACCEPTANCE" in text
+
+
+def test_json_failure_summary_and_bad_output(tmp_path: Path):
+    exc = JSONParseError("bad", purpose="提案者", attempts=4,
+                         last_output="rust\npub trait X {}")
+    assert _failure_summary(exc) == "json_invalid: model emitted rust outside JSON"
+    _write_bad_output(tmp_path, "ENG-03", exc)
+    assert "pub trait" in (tmp_path / "bad_outputs" / "ENG-03.txt").read_text(
+        encoding="utf-8")
+
+
 def test_dry_run_writes_context(toy_pack: Path):
     task = _write_task(toy_pack)
     assert main(["run", "--pack", str(toy_pack), "--task", str(task),
@@ -42,8 +76,24 @@ def test_dry_run_writes_context(toy_pack: Path):
     dumps = list(work.rglob("dryrun-TOY-01.md"))
     assert dumps, "dry-run 应导出上下文文件"
     text = dumps[0].read_text(encoding="utf-8")
-    for section in ["游戏总览", "卡片协议", "目标卡片", "同文件相邻卡片"]:
+    for section in ["游戏总览", "卡片协议", "任务目标", "目标卡片",
+                    "同文件相邻卡片"]:
         assert section in text
+    assert "玩具任务目标" in text
+
+
+def test_dry_run_plain_compact_and_no_stream(toy_pack: Path, capsys):
+    task = _write_task(toy_pack)
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--dry-run", "--no-rich", "--compact"]) == 0
+    out = capsys.readouterr().out
+    assert "[stage:start] planning" in out
+    assert "[plan:updated]" in out
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--dry-run", "--no-stream"]) == 0
+    assert capsys.readouterr().out == ""
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--dry-run", "--disable-message", "--no-rich"]) == 0
 
 
 def test_fake_run_converges_and_bumps_status(toy_pack: Path):
@@ -72,10 +122,9 @@ def test_steer_appears_in_context(toy_pack: Path):
     cfg = load_config(toy_pack)
     repo = RepoIndex.build(cfg.pack.docs_root, cfg.pack.card_files)
     work = WorkDir(cfg.work_dir)
-    task_path = _write_task(toy_pack)
-    bundle = build_bundle(repo.by_id["TOY-01"], repo, cfg, work,
-                          load_task(task_path))
-    rendered = bundle.render()
+    task = load_task(_write_task(toy_pack))
+    builder = ContextBuilder(repo, cfg, work, task)
+    rendered = builder.build(repo.by_id["TOY-01"]).render()
     assert "改为按队伍独立预算" in rendered
     assert "人工方向" in rendered
 
@@ -105,10 +154,50 @@ def test_task_critic_selection(toy_pack: Path):
 
 
 def test_task_rounds_override(toy_pack: Path):
-    from studio.config import load_task
     task_path = _write_task(toy_pack, rounds="{high: 2, normal: 1}")
     t = load_task(task_path)
     assert t.rounds == {"high": 2, "normal": 1}
+
+
+def test_task_goal_optional(toy_pack: Path):
+    """goal 是可选的人工覆盖: 不写由规划阶段分析得出."""
+    p = toy_pack / "no-goal-task.yaml"
+    p.write_text("name: ng\ntarget_files: [cards.md]\n", encoding="utf-8")
+    t = load_task(p)
+    assert t.goal == ""
+
+
+def test_fake_run_writes_plan(toy_pack: Path):
+    """run 必须先产出计划: plan.json 落盘且 todo 全部完成."""
+    import json
+    task = _write_task(toy_pack)
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--fake", "--no-git"]) == 0
+    cfg = load_config(toy_pack)
+    plans = sorted(WorkDir(cfg.work_dir).runs.rglob("plan.json"))
+    assert plans, "run 应落盘 plan.json"
+    plan = json.loads(plans[-1].read_text(encoding="utf-8"))
+    assert plan["goal"] == "玩具任务目标" and plan["source"] == "manual"
+    assert all(t["status"] == "done" for t in plan["todos"])
+    run_dir = plans[-1].parent
+    assert (run_dir / "events.jsonl").is_file()
+    assert (run_dir / "run.log").is_file()
+    assert "card:done" in (run_dir / "run.log").read_text(encoding="utf-8")
+
+
+def test_resume_skips_done_todos(toy_pack: Path, capsys):
+    """resume 读取 plan.json, 默认跳过 done todo."""
+    task = _write_task(toy_pack)
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--fake", "--no-git"]) == 0
+    cfg = load_config(toy_pack)
+    work = WorkDir(cfg.work_dir)
+    run_id = sorted(p.parent.name for p in work.runs.rglob("plan.json"))[-1]
+    assert main(["run", "--pack", str(toy_pack), "--task", str(task),
+                 "--resume", run_id, "--fake", "--no-git"]) == 0
+    out = capsys.readouterr().out
+    assert "resume:loaded" in out
+    assert "cards=0" in out
 
 
 def test_context_budget_trims(toy_pack: Path):
@@ -119,7 +208,8 @@ def test_context_budget_trims(toy_pack: Path):
     repo = RepoIndex.build(cfg.pack.docs_root, cfg.pack.card_files)
     work = WorkDir(cfg.work_dir)
     task = load_task(_write_task(toy_pack))
-    bundle = build_bundle(repo.by_id["TOY-02"], repo, cfg, work, task)
+    builder = ContextBuilder(repo, cfg, work, task)
+    bundle = builder.build(repo.by_id["TOY-02"])
     assert bundle.total_chars <= 1200
     names = [s.name for s in bundle.sections if s.text.strip()]
     assert "游戏总览" in names and "卡片协议" in names

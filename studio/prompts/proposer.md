@@ -8,6 +8,9 @@
 5. 主编 reject 的意见不要执行; praise 中列出的优点必须保留。
 6. 数值给初始值+区间, 没把握标 [待评估校准]。
 7. 如确需大幅扩写(超过原文 1.5 倍), 在 expansion_rationale 中说明理由, 否则保持精炼。
+8. 修订方向必须服务 <<<任务目标>>> 段声明的目标与约束; 上下文若含 <<<技能>>> 段, 修订时落实其方法论要点。
+9. 即使主编要求细化 Rust 类型、trait、schema 或字段契约, 也必须把这些内容写入 card_markdown 的 markdown 正文中; 禁止在 JSON 外输出 Rust 代码块、Markdown 或任何解释文字。
+10. card_markdown 是 JSON string: 多行 markdown、代码块、引号都必须作为 JSON 字符串内容正确转义。顶层 JSON 只能包含 card_markdown、responses、expansion_rationale 三个字段。
 ---
 <<CONTEXT>>
 
@@ -17,9 +20,9 @@
 当前卡片原文(修订基准):
 <<CURRENT_CARD>>
 
-只输出一个 JSON 对象, 不要任何其他文字, 结构如下:
+只输出一个 JSON 对象, 不要任何其他文字。正确示例(注意: markdown 卡片全文在 card_markdown 字符串内部, JSON 外没有任何 Rust/Markdown):
 {
-  "card_markdown": "完整的新卡片块(从 ### 行开始, markdown 字符串)",
-  "responses": ["指令1: 落实位置与方式", "指令2: ..."],
+  "card_markdown": "### ENG-03 引擎统一接口契约\n\n状态: draft · 优先级: P0 · 依赖: ENG-01\n\n**目的**：...\n\n**设计理念**：...\n\n**如何设计**：\n- 若需要 Rust 类型示意, 放在本字段的 markdown 正文里, 不要放在 JSON 外。\n\n**验收标准**：\n- [机器] ...\n\n**评估钩子**：\n- ...\n",
+  "responses": ["指令1: 已在 **如何设计** 中补字段契约"],
   "expansion_rationale": ""
 }

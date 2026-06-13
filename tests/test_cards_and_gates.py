@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from studio.cards import RepoIndex, parse_block, parse_file, replace_card
-from studio.config import GuardCfg
-from studio.gates import check_revision
+from studio.core.cards import RepoIndex, parse_block, parse_file, replace_card
+from studio.core.config import GuardCfg
+from studio.core.gates import check_revision
 
 from conftest import CARD_A
 
 
 def test_roundtrip_real_repo(real_pack_cfg):
-    """对 football-docs 全库: 解析后重组 == 原文; 原样替换 == 原文."""
+    """对 topis/football-docs 全库: 解析后重组 == 原文; 原样替换 == 原文."""
     repo = RepoIndex.build(real_pack_cfg.pack.docs_root,
                            real_pack_cfg.pack.card_files)
     assert len(repo.by_id) >= 80, "应索引到全部 88 张卡片"

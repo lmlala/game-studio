@@ -9,7 +9,7 @@
 
 slots:
   workhorse:                       # 批量工作位: 提案/批判
-    provider: openai_compat
+    provider: deepseek
     base_url: https://api.deepseek.com
     model: deepseek-chat
     api_key_env: DEEPSEEK_API_KEY
@@ -19,7 +19,7 @@ slots:
     price_out_per_m: 0.42
 
   judge:                           # 裁决位: 主编(预算允许时可升档)
-    provider: openai_compat
+    provider: deepseek
     base_url: https://api.deepseek.com
     model: deepseek-reasoner
     api_key_env: DEEPSEEK_API_KEY
@@ -28,9 +28,14 @@ slots:
     price_in_per_m: 0.28
     price_out_per_m: 0.42
 
-# 备选: 通义千问(OpenAI 兼容模式), 替换上面任一位即可
+# 备选: 通义千问 (OpenAI 兼容模式), 替换上面任一位即可
+# DeepSeek 官方 API 无 Batch 异步接口; 本 agent 为同步轮次编排, 不适用 Batch。
+#
 #  workhorse:
-#    provider: openai_compat
+#    provider: qwen
 #    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-#    model: qwen-plus
+#    model: qwen3.6-max          # 或 qwen-plus / qwen-flash
 #    api_key_env: DASHSCOPE_API_KEY
+#    enable_thinking: false      # JSON 模式必须 false; 非 JSON 场景可 true
+#    temperature: 0.2
+#    max_output_tokens: 4096

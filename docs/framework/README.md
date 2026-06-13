@@ -44,6 +44,8 @@ Copyright (c) 2025 FiuAI
 
 | 文件 | 内容 |
 | --- | --- |
+| [`../studio/README.md`](../studio/README.md) | **当前实现索引**：代码子包结构、规划/skills/上下文/记忆的工程事实 |
+| [`../studio/rules.md`](../studio/rules.md) | **当前开发规则**：后续 agent 修改 studio 前必须遵守 |
 | [`01-architecture.md`](01-architecture.md) | 内核/项目包分离、工作区与数据模型、状态机、编排器、模型路由、成本管理 |
 | [`02-roles-and-iteration.md`](02-roles-and-iteration.md) | 角色系统、多轮迭代协议、收敛与停机规则、方向注入、防退化 |
 | [`03-pipeline-and-handoff.md`](03-pipeline-and-handoff.md) | 端到端六阶段管线、输入 brief 规范、交接包格式（PRD/UX/Tech/Test/Tasks）、与编码 agent 的对接 |
@@ -53,38 +55,40 @@ Copyright (c) 2025 FiuAI
 
 内核独立成库（复用的物理前提），项目包跟随各自项目仓：
 
-```text
-design-studio/                  # 独立仓库: 内核 (Python)
-├── studio/
-│   ├── orchestrator.py         # 编排器: 阶段机 + 轮次循环
-│   ├── roles/                  # 角色运行时 (加载 cast 配置)
-│   ├── tools/                  # 工具运行时 + 内置工具
-│   ├── skills/                 # skill 装载器 (skill 内容在项目包)
-│   ├── schema/                 # 工件 front-matter / 消息 JSON schema
-│   ├── gates/                  # 机器门禁 (lint/引用/可判定性)
-│   ├── models.py               # 模型路由 + 成本计量
-│   └── workspace.py            # git 工作区操作
-├── kernel-skills/              # 项目无关的通用 skill (可选少量)
-└── tests/
+当前仓库已按“内核 + 项目包 + 议题区”落地，详见
+[`docs/studio/architecture.md`](../studio/architecture.md)：
 
-my-ft/                          # 本项目仓库
-└── studio-pack/                # 项目包 #1 (首个用户)
-    ├── brief.yaml              # 商业目标/风格/理念/用户画像/约束
-    ├── cast.yaml               # 角色班子配置 (批判者/模拟用户绑定)
-    ├── schema.yaml             # 设计单元 schema (= 00 卡片协议的机读版)
-    ├── skills/                 # 领域 skill (markdown)
-    ├── gates/                  # 项目门禁 (术语表/禁用词/规则 DSL 引用)
-    ├── adapters/               # 项目工具适配器 (sim_run / funnel_report)
-    └── templates/              # 交接包模板 (prd/ux/tech/tests/task)
+```text
+studio/
+├── core/             # 配置 / 卡片协议 / 门禁 / 抽象接口
+├── llm/              # 模型路由 / JSON 修复 / 缓存 / 成本
+├── roles/            # schema / 模板角色 / RoleFactory
+├── skills/           # skill 解析 / 注册表 / 装载裁决
+├── skills_builtin/   # 内核通用 skill
+├── context/          # 角色隔离视图 / 压缩 / 裁剪
+├── memory/           # workdir / topic 记忆 / agent 记忆
+└── loop/             # planning + CardRunner
+
+packs/my-ft/
+├── pack.yaml         # docs_root / settings / guards / skills_dirs
+├── cast.yaml         # planner / proposer / critics / referee
+├── models.yaml       # 模型位
+└── skills/           # my-ft 领域 skill
+
+topis/
+├── football-docs/    # 原始议题与设计卡片
+└── tasks/            # 任务卡片
 ```
 
 ## 5. 里程碑（按此顺序实现）
 
 | 里程碑 | 内容 | 验收 |
 | --- | --- | --- |
-| **M0** | 内核骨架：工作区 + schema + 单角色（提案者+验收官）闭环 = 14 号文档的流水线 | 对 football-docs 现有卡片跑通精修，采纳率 ≥ 60% |
+| **M0** | 内核骨架：工作区 + schema + 单角色（提案者+验收官）闭环 = 14 号文档的流水线 | 对 topis/football-docs 现有卡片跑通精修，采纳率 ≥ 60% |
 | **M1** | 角色班子 + 主编 + 多轮收敛；方向注入 | 同一卡片多轮后质量盲评优于 M0 单轮（人工对比 10 例） |
-| **M2** | tool 运行时 + skill 装载；模拟用户角色 | 批判产出中引用 skill 检查点 / 工具证据的比例 ≥ 50% |
+| **M1.5（已实现）** | 规划阶段：读任务卡分析 goal/todo/constraints/risks，plan.json 落盘 | dry-run 走 fallback；fake run 走 planner；todo 状态由内核推进 |
+| **M2a（已实现）** | skill 装载：绑定 / 申请 / 触发三路，预算裁决；topic/agent 记忆 | `skills` CLI 可校验；上下文隔离与记忆 digest 有单测 |
+| **M2b** | tool 运行时 + 模拟用户角色 | 批判产出中引用 skill 检查点 / 工具证据的比例 ≥ 50% |
 | **M3** | 交接包编译器（PRD/UX/Tech/Test/Tasks） | 取 1 个模块生成交接包，喂 Cursor/Claude Code 实现，一次跑通编译+测试骨架 |
 | **M4** | 复用验证：第二个项目包（建议拿一个小效率 app 的 brief 做干跑） | 不改内核代码完成 Phase 0-2，缺口全部记录为内核 issue |
 
